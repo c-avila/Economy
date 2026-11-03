@@ -1,0 +1,92 @@
+Atue como um Arquiteto de Software Sênior, economista com experiência em mercado de ações e especialista em Ciência de Dados e Ciências Sociais Computacionais, com dupla expertise em desenvolvimento de aplicações Full Stack/Desktop robustas.
+ 
+Tenho zero conhecimento em programação. Quero que você construa, de forma completa e executável, uma aplicação desktop para Windows 11 que analise o mercado de ações em conjunto com variáveis macroeconômicas. Não preciso que você explique o que é programação — apenas me entregue o projeto pronto e, se necessário, explicações simples em português.
+
+═══════════════════════════════════════
+1. OBJETIVO DO PRODUTO
+═══════════════════════════════════════
+Uma plataforma de desktop (Windows 11) que permite ao usuário:
+  a) Analisar ações de empresas (preços históricos, OHLCV, candles, estatísticas).
+  b) Consultar cotações de moedas e comparar o dólar (USD) frente a outras moedas
+     (EUR, GBP, JPY, CNY, BRL, etc.) e o Dólar Americano Index (DXY).
+  c) Consultar taxas de juros de diferentes países (ex.: taxa de juros da Fed nos EUA,
+     Selic no Brasil, BoE no Reino Unido, BCE na Europa, JCC no Japão).
+  d) Comparar variáveis socioeconômicas entre países (PIB, PIB per capita, inflação,
+     desemprego, taxa de câmbio oficial, população).
+  e) Apresentar dashboards, tabelas e gráficos interativos.
+
+═══════════════════════════════════════
+2. STACK TECNOLÓGICA (OBRIGATÓRIA)
+═══════════════════════════════════════
+  - Interface gráfica (GUI): Rust com a biblioteca egui (egui + eframe) — estilo imediato,
+    leve e nativo para Windows 11. Usar egui_extras para tabelas.
+  - Motor de dados e análise: Python (pandas, numpy, matplotlib/plotly).
+  - Integração Rust ↔ Python: Rust (GUI) chama Python via subprocess (robusto) OU via PyO3
+    (rust-cpython) para chamadas diretas. Prefira a abordagem mais estável e fácil de manter.
+  - Comunicação assíncrona e tratamento de erros entre as duas linguagens.
+
+═══════════════════════════════════════
+3. FONTES DE DADOS (USAR BIBLIOTECAS REAIS E GRATUITAS)
+═══════════════════════════════════════
+  - AÇÕES e histórico de preços: biblioteca Python `yfinance` (Yahoo Finance).
+    Ex.: ticker "AAPL", "PETR4", "VALE3", "NVDA", etc. Retornar séries OHLCV.
+  - COTAÇÕES DE MOEDAS / DÓLAR: `yfinance` também, com tickers de moeda:
+    "EURUSD=X", "GBPUSD=X", "USDCNY=X", "USDBRL=X", "DXY=" (Índice Dólar).
+  - TAXAS DE JUROS por país: biblioteca `fredapi` (Federal Reserve Economic Data) ou
+    `pandas_datareader`. Séries como "DFF" (Fed funds EUA), "SELIC", "GKLIB3M" (BCE),
+    "GBRBOE1M" (BoE). O usuário selecionará os países.
+  - VARIÁVEIS SOCIOECONÔMICAS por país: API da World Bank (biblioteca `pandas_datareader`
+    ou `requests` direto para api.worldbank.org). Séries como GDP, GDP per capita,
+    CPI (inflação), unemployment, population, exchange rate.
+  - Validação de dados: tratar valores faltantes (NaN), erros de API e atraso de dados.
+
+═══════════════════════════════════════
+4. ARQUITETURA TÉCNICA
+═══════════════════════════════════════
+  - Camada de Dados (Python): coleta, limpeza, caching (ex.: salvar dados em CSV/SQLite
+    ou cache em memória) e processamento estatístico.
+  - Camada de Apresentação (Rust + egui): interface gráfica, navegação entre abas/visualizações.
+  - Camada de Lógica de Negócio: regras de cálculo, conversão de moeda, formatação e
+    agregação de indicadores.
+  - Persistência: salvar configurações do usuário (cotações favoritas, países selecionados,
+    período de consulta) em arquivo local (JSON ou similar).
+  - Cache de dados: para evitar requisições repetidas e melhorar a velocidade.
+
+═══════════════════════════════════════
+5. REQUISITOS TÉCNICOS / AMBIENTE
+═══════════════════════════════════════
+  - Plataforma-alvo: Windows 11.
+  - Rust: compilar para Windows (MSVC ou windows-gnu). Documentar como instalar via rustup.
+  - Python: ambiente isolado (venv) com todas as dependências listadas.
+  - Documentar passo a passo de instalação e execução para iniciante no Windows 11.
+  - Utilize as imagens Dax1 a Dax4 como sugestões de interface.
+
+═══════════════════════════════════════
+6. ENTREGÁVEIS ESPERADOS
+═══════════════════════════════════════
+  a) Estrutura completa do projeto (arquivos, pastas, dependências).
+  b) Código-fonte executável do motor de dados em Python (com funções para cada fonte).
+  c) Código-fonte da interface em Rust (egui) com navegação entre as abas (a), (b), (c), (d), (e).
+  d) Funções críticas: consulta de ações, consulta de moedas/dólar, consulta de juros,
+     consulta socioeconômica, conversão de moeda, formatação de datas/valores.
+  e) Gráficos interativos (matplotlib ou plotly) e tabelas (egui_extras).
+  f) Instruções de instalação e execução detalhadas para Windows 11.
+  g) Lista de dependências (Cargo.toml para Rust, requirements.txt para Python).
+
+═══════════════════════════════════════
+7. PADRÕES DE QUALIDADE
+═══════════════════════════════════════
+  - Código modular, com funções pequenas e bem documentadas em português.
+  - Tratamento robusto de erros (nunca travar a aplicação; mostrar mensagens claras).
+  - Tipagem forte em Rust; validação de entrada em Python.
+  - Segurança: nunca armazenar credenciais em texto claro; se necessário, usar variáveis de
+    ambiente para a API key do FRED.
+  - Boas práticas de LGPD/privacidade: não coletar dados pessoais do usuário.
+
+═══════════════════════════════════════
+8. INSTRUÇÕES DE COMUNICAÇÃO
+═══════════════════════════════════════
+  - Explique cada parte em português, de forma simples e didática.
+  - Ao final, liste os próximos passos recomendados para evoluir o projeto.
+  - Comece pela estrutura do projeto e pelo arquivo de dependências (Cargo.toml e requirements.txt),
+    depois avance para o motor de dados (Python) e, por fim, a interface (Rust/egui).

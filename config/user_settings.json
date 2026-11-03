@@ -1,0 +1,43 @@
+{
+  "favorite_tickers": [
+    "PETR4",
+    "VALE3",
+    "ITUB4",
+    "BBDC4",
+    "BBAS3",
+    "AAPL",
+    "NVDA",
+    "MSFT",
+    "RDOR3",
+    "BVSP"
+  ],
+  "selected_ticker": "AAPL",
+  "selected_period": "1mo",
+  "display_currency": "BRL",
+  "selected_forex_pairs": [
+    "USDBRL=X",
+    "EURUSD=X",
+    "GBPUSD=X",
+    "USDJPY=X",
+    "USDCNY=X",
+    "DX-Y.NYB"
+  ],
+  "selected_interest_countries": [
+    "BR",
+    "US",
+    "EU",
+    "GB",
+    "JP"
+  ],
+  "selected_macro_countries": [
+    "BRA",
+    "USA",
+    "CHN",
+    "DEU",
+    "GBR",
+    "JPN"
+  ],
+  "macro_start_year": 2015,
+  "macro_end_year": 2025,
+  "use_cache": true
+}
