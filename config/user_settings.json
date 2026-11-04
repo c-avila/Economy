@@ -6,14 +6,13 @@
     "BBDC4",
     "BBAS3",
     "AAPL",
-    "NVDA",
     "MSFT",
     "RDOR3",
     "BVSP"
   ],
-  "selected_ticker": "AAPL",
-  "selected_period": "1mo",
-  "display_currency": "BRL",
+  "selected_ticker": "PETR4",
+  "selected_period": "1y",
+  "display_currency": "ORIGINAL",
   "selected_forex_pairs": [
     "USDBRL=X",
     "EURUSD=X",
@@ -22,20 +21,27 @@
     "USDCNY=X",
     "DX-Y.NYB"
   ],
+  "forex_spotlight_three": [
+    "USDBRL=X",
+    "EURUSD=X",
+    "USDJPY=X"
+  ],
+  "disabled_forex_chart_pairs": [],
   "selected_interest_countries": [
-    "BR",
     "US",
+    "BR",
     "EU",
     "GB",
-    "JP"
+    "JP",
+    "CN"
   ],
   "selected_macro_countries": [
-    "BRA",
     "USA",
-    "CHN",
+    "BRA",
     "DEU",
     "GBR",
-    "JPN"
+    "JPN",
+    "CHN"
   ],
   "macro_start_year": 2015,
   "macro_end_year": 2025,

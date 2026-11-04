@@ -136,3 +136,50 @@ pub fn hero_blue_frame() -> egui::Frame {
         .rounding(Rounding::same(6.0))
         .inner_margin(egui::Margin::same(12.0))
 }
+
+/// Renderiza uma barra de legenda horizontal posicionada ABAIXO do gráfico,
+/// impedindo que a legenda se sobreponha às linhas, candles ou barras do gráfico.
+pub fn renderizar_legenda_abaixo(ui: &mut Ui, itens: &[(Color32, String)]) {
+    if itens.is_empty() {
+        return;
+    }
+    ui.add_space(4.0);
+    egui::Frame::none()
+        .fill(BG_CARD_ALT)
+        .stroke(Stroke::new(1.0_f32, BORDER_SUBTLE))
+        .rounding(Rounding::same(5.0))
+        .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(14.0, 5.0);
+                ui.label(
+                    RichText::new("Legenda:")
+                        .size(11.0)
+                        .strong()
+                        .color(TEXT_MUTED),
+                );
+                for (cor, rotulo) in itens {
+                    let mut job = egui::text::LayoutJob::default();
+                    job.append(
+                        "▬ ",
+                        0.0,
+                        egui::TextFormat {
+                            font_id: egui::FontId::proportional(13.0),
+                            color: *cor,
+                            ..Default::default()
+                        },
+                    );
+                    job.append(
+                        rotulo,
+                        0.0,
+                        egui::TextFormat {
+                            font_id: egui::FontId::proportional(11.5),
+                            color: TEXT_LIGHT,
+                            ..Default::default()
+                        },
+                    );
+                    ui.add(egui::Label::new(job).wrap_mode(egui::TextWrapMode::Extend));
+                }
+            });
+        });
+}

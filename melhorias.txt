@@ -1,0 +1,27 @@
+melhorias:
+
+- Nome do Aplicativo será "DAX - Data Analysis Exchange"
+
+- Quando abro o item "(b) Moedas % Dolar (DXY)"  o gráfico e a tabela abaixo deste extrapolam a area de visualização saindo da janela do programa e as informações exibidas são escondidas , fazer com que as informações estejam dentro da janela aberta sempre.
+
+- o mesmo erro descrito no item anterior se repete no item (c) Taxas de Juros(BCs), corrigir o erro.
+
+- Quando as informações não cabem ja janela do aplicativo deve ser incorporadas uma barra de rolagem para permitir que se visualize todas as informações.
+
+- dar a opção de remover os "Ativos Favoritos" que foram inseridos mas não são mais necessaries.
+
+- No item "(b) Moedas % Dolar (DXY)", no local aonde nesta versão aparece um pequeno grafico da variação do dolar, acrescentar mecanismo para escolher que apareçam as variações de até três diferentes moedas em relação ao Dollar americano.
+
+- No item "(b) Moedas % Dolar (DXY)", no item Evolução Comparativa Cambial, permitir ativar ou desativar as moedas que estão sendo comparadas.
+
+- No item "(b) Moedas % Dolar (DXY)", permitir a inserção de outras moedas ou a retirada das mesmas, até um limite de 10 moedas.
+
+- No item "(b) Moedas % Dolar (DXY)", no grafico apresentado, no eixo dos anos, apresentar a data (ano) para deixar o grafico mais claro de entender.
+
+- No item "(c) Taxas de Juros (BCs)", Aonde agora é apresentado a Taxa de juros americanos, acrescentar a taxa atual dos outros paises selecionados.
+
+- No item "(c) Taxas de Juros (BCs)", no grafico apresentado, no eixo dos anos, apresentar a data (ano) para deixar o grafico mais claro de entender.
+
+- No item "(d) Socioeconomia (WB), no grafico apresentado, no eixo dos anos, apresentar a data de inicio e final dos dado (ano) para deixar o grafico mais claro de entender.
+
+- No item "(d) Socioeconomia (WB) e "(c) Taxas de Juros (BCs)", utilizar os mesmos paises selecionados no item "(b) Moedas % Dolar (DXY)".

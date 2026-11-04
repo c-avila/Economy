@@ -1,10 +1,10 @@
 """
-Módulo de Cotações de Moedas, Dólar Americano (USD) e Índice DXY.
-Utiliza `yfinance` para buscar pares cambiais e o índice Dólar (DX-Y.NYB / DXY=),
+Módulo de Cotações de Moedas, Dólar Americano (USD) e Índice DXY — DAX v0.2.
+Utiliza `yfinance` para buscar até 10 pares cambiais e o índice Dólar (DX-Y.NYB / DXY=),
 além de realizar conversões de moedas em tempo real e comparações em Base 100.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import math
 from typing import Any
 
@@ -18,7 +18,7 @@ except ImportError:
 
 from .cache_manager import obter_cache, salvar_cache
 
-# Metadados amigáveis para os pares de moedas e DXY
+# Catálogo expandido de pares cambiais e Índice Dólar (DXY) com vínculo aos países de Juros (BC) e World Bank
 CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
     "DX-Y.NYB": {
         "codigo_exibicao": "DXY=",
@@ -26,48 +26,107 @@ CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
         "moeda_base": "USD",
         "moeda_cotacao": "Cesta Global",
         "pais": "Estados Unidos",
+        "interest_code": "US",
+        "wb_code": "USA",
     },
     "USDBRL=X": {
         "codigo_exibicao": "USDBRL=X",
-        "nome": "Dólar Comercial vs Real Brasileiro",
+        "nome": "Dólar vs Real Brasileiro (BRL)",
         "moeda_base": "USD",
         "moeda_cotacao": "BRL",
         "pais": "Brasil",
+        "interest_code": "BR",
+        "wb_code": "BRA",
     },
     "EURUSD=X": {
         "codigo_exibicao": "EURUSD=X",
-        "nome": "Euro vs Dólar Americano",
+        "nome": "Euro vs Dólar Americano (EUR)",
         "moeda_base": "EUR",
         "moeda_cotacao": "USD",
-        "pais": "Zona do Euro",
+        "pais": "Zona do Euro / Alemanha",
+        "interest_code": "EU",
+        "wb_code": "DEU",
     },
     "GBPUSD=X": {
         "codigo_exibicao": "GBPUSD=X",
-        "nome": "Libra Esterlina vs Dólar Americano",
+        "nome": "Libra Esterlina vs Dólar (GBP)",
         "moeda_base": "GBP",
         "moeda_cotacao": "USD",
         "pais": "Reino Unido",
+        "interest_code": "GB",
+        "wb_code": "GBR",
     },
     "USDJPY=X": {
         "codigo_exibicao": "USDJPY=X",
-        "nome": "Dólar Americano vs Iene Japonês",
+        "nome": "Dólar vs Iene Japonês (JPY)",
         "moeda_base": "USD",
         "moeda_cotacao": "JPY",
         "pais": "Japão",
+        "interest_code": "JP",
+        "wb_code": "JPN",
     },
     "USDCNY=X": {
         "codigo_exibicao": "USDCNY=X",
-        "nome": "Dólar Americano vs Yuan Chinês",
+        "nome": "Dólar vs Yuan Chinês (CNY)",
         "moeda_base": "USD",
         "moeda_cotacao": "CNY",
         "pais": "China",
+        "interest_code": "CN",
+        "wb_code": "CHN",
     },
     "USDCHF=X": {
         "codigo_exibicao": "USDCHF=X",
-        "nome": "Dólar Americano vs Franco Suíço",
+        "nome": "Dólar vs Franco Suíço (CHF)",
         "moeda_base": "USD",
         "moeda_cotacao": "CHF",
         "pais": "Suíça",
+        "interest_code": "CH",
+        "wb_code": "CHE",
+    },
+    "USDCAD=X": {
+        "codigo_exibicao": "USDCAD=X",
+        "nome": "Dólar vs Dólar Canadense (CAD)",
+        "moeda_base": "USD",
+        "moeda_cotacao": "CAD",
+        "pais": "Canadá",
+        "interest_code": "CA",
+        "wb_code": "CAN",
+    },
+    "AUDUSD=X": {
+        "codigo_exibicao": "AUDUSD=X",
+        "nome": "Dólar Australiano vs Dólar (AUD)",
+        "moeda_base": "AUD",
+        "moeda_cotacao": "USD",
+        "pais": "Austrália",
+        "interest_code": "AU",
+        "wb_code": "AUS",
+    },
+    "USDMXN=X": {
+        "codigo_exibicao": "USDMXN=X",
+        "nome": "Dólar vs Peso Mexicano (MXN)",
+        "moeda_base": "USD",
+        "moeda_cotacao": "MXN",
+        "pais": "México",
+        "interest_code": "MX",
+        "wb_code": "MEX",
+    },
+    "USDARS=X": {
+        "codigo_exibicao": "USDARS=X",
+        "nome": "Dólar vs Peso Argentino (ARS)",
+        "moeda_base": "USD",
+        "moeda_cotacao": "ARS",
+        "pais": "Argentina",
+        "interest_code": "AR",
+        "wb_code": "ARG",
+    },
+    "USDINR=X": {
+        "codigo_exibicao": "USDINR=X",
+        "nome": "Dólar vs Rúpia Indiana (INR)",
+        "moeda_base": "USD",
+        "moeda_cotacao": "INR",
+        "pais": "Índia",
+        "interest_code": "IN",
+        "wb_code": "IND",
     },
 }
 
@@ -80,11 +139,16 @@ TAXAS_USD_FALLBACK: dict[str, float] = {
     "JPY": 152.40,
     "CNY": 7.24,
     "CHF": 0.88,
+    "CAD": 1.39,
+    "AUD": 1.52,
+    "MXN": 20.15,
+    "ARS": 995.00,
+    "INR": 84.10,
 }
 
 
 def normalizar_ticker_moeda(ticker: str) -> str:
-    """Converte atalhos como 'DXY=' ou 'BRL' para o ticker exato do Yahoo Finance."""
+    """Converte atalhos como 'DXY=', 'BRL', 'CAD', 'ARS' para o ticker exato do Yahoo Finance."""
     t = ticker.strip().upper()
     if t in ("DXY", "DXY=", "^DXY", "DX-Y.NYB"):
         return "DX-Y.NYB"
@@ -101,6 +165,17 @@ def normalizar_ticker_moeda(ticker: str) -> str:
         "USDCNY": "USDCNY=X",
         "CHF": "USDCHF=X",
         "USDCHF": "USDCHF=X",
+        "CAD": "USDCAD=X",
+        "USDCAD": "USDCAD=X",
+        "AUD": "AUDUSD=X",
+        "AUDUSD": "AUDUSD=X",
+        "USDAUD=X": "AUDUSD=X",
+        "MXN": "USDMXN=X",
+        "USDMXN": "USDMXN=X",
+        "ARS": "USDARS=X",
+        "USDARS": "USDARS=X",
+        "INR": "USDINR=X",
+        "USDINR": "USDINR=X",
     }
     if t in mapeamento_curto:
         return mapeamento_curto[t]
@@ -134,6 +209,11 @@ def _gerar_serie_cambial_contingencia(yf_ticker: str, period: str = "1y") -> pd.
         "USDJPY=X": 152.40,
         "USDCNY=X": 7.24,
         "USDCHF=X": 0.882,
+        "USDCAD=X": 1.391,
+        "AUDUSD=X": 0.658,
+        "USDMXN=X": 20.15,
+        "USDARS=X": 995.50,
+        "USDINR=X": 84.10,
     }
     preco_base = base_map.get(yf_ticker, 1.0)
     rng = np.random.default_rng(abs(hash(yf_ticker)) % 100000)
@@ -157,10 +237,10 @@ def _gerar_serie_cambial_contingencia(yf_ticker: str, period: str = "1y") -> pd.
 
 def obter_taxas_cambio_usd(usar_cache: bool = True) -> dict[str, float]:
     """
-    Retorna quanto 1 USD vale em cada moeda (USD, BRL, EUR, GBP, JPY, CNY).
+    Retorna quanto 1 USD vale em cada moeda suportada.
     Usado para conversão automática de preços de ações e comparativos.
     """
-    cache_key = "forex_spot_usd_rates"
+    cache_key = "forex_spot_usd_rates_v2"
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=1800)
         if cached and "rates" in cached:
@@ -169,24 +249,38 @@ def obter_taxas_cambio_usd(usar_cache: bool = True) -> dict[str, float]:
     rates = dict(TAXAS_USD_FALLBACK)
     if yf is not None:
         try:
-            tickers = ["USDBRL=X", "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCNY=X"]
+            tickers = [
+                "USDBRL=X", "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCNY=X",
+                "USDCHF=X", "USDCAD=X", "AUDUSD=X", "USDMXN=X", "USDARS=X", "USDINR=X",
+            ]
             dados = yf.download(tickers, period="5d", progress=False, auto_adjust=True)
             if not dados.empty and "Close" in dados:
                 close_df = dados["Close"]
-                if "USDBRL=X" in close_df and not close_df["USDBRL=X"].dropna().empty:
-                    rates["BRL"] = _limpar_float(close_df["USDBRL=X"].dropna().iloc[-1], 5.75)
-                if "EURUSD=X" in close_df and not close_df["EURUSD=X"].dropna().empty:
-                    eur_usd = _limpar_float(close_df["EURUSD=X"].dropna().iloc[-1], 1.085)
-                    if eur_usd > 0:
-                        rates["EUR"] = round(1.0 / eur_usd, 4)
-                if "GBPUSD=X" in close_df and not close_df["GBPUSD=X"].dropna().empty:
-                    gbp_usd = _limpar_float(close_df["GBPUSD=X"].dropna().iloc[-1], 1.29)
-                    if gbp_usd > 0:
-                        rates["GBP"] = round(1.0 / gbp_usd, 4)
-                if "USDJPY=X" in close_df and not close_df["USDJPY=X"].dropna().empty:
-                    rates["JPY"] = _limpar_float(close_df["USDJPY=X"].dropna().iloc[-1], 152.4)
-                if "USDCNY=X" in close_df and not close_df["USDCNY=X"].dropna().empty:
-                    rates["CNY"] = _limpar_float(close_df["USDCNY=X"].dropna().iloc[-1], 7.24)
+                diretos = [
+                    ("USDBRL=X", "BRL", 5.75),
+                    ("USDJPY=X", "JPY", 152.4),
+                    ("USDCNY=X", "CNY", 7.24),
+                    ("USDCHF=X", "CHF", 0.88),
+                    ("USDCAD=X", "CAD", 1.39),
+                    ("USDMXN=X", "MXN", 20.15),
+                    ("USDARS=X", "ARS", 995.0),
+                    ("USDINR=X", "INR", 84.10),
+                ]
+                for tk, cod_m, pad in diretos:
+                    if tk in close_df and not close_df[tk].dropna().empty:
+                        rates[cod_m] = _limpar_float(close_df[tk].dropna().iloc[-1], pad)
+
+                invertidos = [
+                    ("EURUSD=X", "EUR", 1.085),
+                    ("GBPUSD=X", "GBP", 1.29),
+                    ("AUDUSD=X", "AUD", 0.658),
+                ]
+                for tk, cod_m, pad in invertidos:
+                    if tk in close_df and not close_df[tk].dropna().empty:
+                        val_usd = _limpar_float(close_df[tk].dropna().iloc[-1], pad)
+                        if val_usd > 0:
+                            rates[cod_m] = round(1.0 / val_usd, 4)
+
             salvar_cache(cache_key, "forex_rates", {"rates": rates})
         except Exception:
             pass
@@ -214,7 +308,7 @@ def consultar_moedas_e_dxy(
     usar_cache: bool = True,
 ) -> dict[str, Any]:
     """
-    Consulta cotações históricas e atuais de moedas frente ao USD e o Índice DXY.
+    Consulta cotações históricas e atuais de até 10 moedas frente ao USD e o Índice DXY.
     Retorna séries temporais nominais e normalizadas (Base 100 no início do período).
     """
     if not pares:
@@ -226,7 +320,10 @@ def consultar_moedas_e_dxy(
         if tn not in pares_norm:
             pares_norm.append(tn)
 
-    cache_key = f"forex_dashboard_{'_'.join(sorted(pares_norm))}_{period}"
+    # Limita a no máximo 10 moedas + DXY para manter visualização limpa conforme especificação
+    pares_norm = pares_norm[:11]
+
+    cache_key = f"forex_dashboard_v2_{'_'.join(sorted(pares_norm))}_{period}"
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=1800)
         if cached:
@@ -254,7 +351,6 @@ def consultar_moedas_e_dxy(
             continue
 
         fechamentos = df_hist["Close"].astype(float)
-        aberturas = df_hist["Open"].astype(float) if "Open" in df_hist else fechamentos
         maximas = df_hist["High"].astype(float) if "High" in df_hist else fechamentos
         minimas = df_hist["Low"].astype(float) if "Low" in df_hist else fechamentos
 
@@ -267,7 +363,6 @@ def consultar_moedas_e_dxy(
         min_periodo = _limpar_float(minimas.min(), atual)
         max_periodo = _limpar_float(maximas.max(), atual)
 
-        # Volatilidade anualizada (%)
         retornos_diarios = fechamentos.pct_change().dropna()
         volatilidade_anual = (
             _limpar_float(retornos_diarios.std() * math.sqrt(252) * 100.0, 0.0)
@@ -275,7 +370,6 @@ def consultar_moedas_e_dxy(
             else 0.0
         )
 
-        # Série histórica (limitada a 260 pontos para performance fluida na GUI)
         df_plot = df_hist.tail(260)
         base_100_ini = float(df_plot["Close"].iloc[0]) if float(df_plot["Close"].iloc[0]) != 0 else 1.0
 
@@ -334,4 +428,3 @@ def consultar_moedas_e_dxy(
     }
     salvar_cache(cache_key, "forex", resposta)
     return resposta
-

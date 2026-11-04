@@ -1,8 +1,24 @@
-//! Gerenciamento de persistência das configurações do usuário em JSON (`config/user_settings.json`).
+//! Gerenciamento de persistência das configurações do usuário em JSON (`config/user_settings.json`) — DAX v0.2.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+
+/// Catálogo estático que vincula cada Par Cambial da Aba (b) ao País de Juros (Aba c) e ao País World Bank (Aba d).
+pub const CATALOGO_MOEDAS_PAISES: &[(&str, &str, &str, &str)] = &[
+    // (Ticker Yahoo, Rótulo Amigável, Código Juros BC, Código World Bank ISO-3)
+    ("USDBRL=X", "BRL — Real Brasileiro (Brasil)", "BR", "BRA"),
+    ("EURUSD=X", "EUR — Euro (Zona do Euro / Alemanha)", "EU", "DEU"),
+    ("GBPUSD=X", "GBP — Libra Esterlina (Reino Unido)", "GB", "GBR"),
+    ("USDJPY=X", "JPY — Iene Japonês (Japão)", "JP", "JPN"),
+    ("USDCNY=X", "CNY — Yuan Chinês (China)", "CN", "CHN"),
+    ("USDCHF=X", "CHF — Franco Suíço (Suíça)", "CH", "CHE"),
+    ("USDCAD=X", "CAD — Dólar Canadense (Canadá)", "CA", "CAN"),
+    ("AUDUSD=X", "AUD — Dólar Australiano (Austrália)", "AU", "AUS"),
+    ("USDMXN=X", "MXN — Peso Mexicano (México)", "MX", "MEX"),
+    ("USDARS=X", "ARS — Peso Argentino (Argentina)", "AR", "ARG"),
+    ("USDINR=X", "INR — Rúpia Indiana (Índia)", "IN", "IND"),
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -12,6 +28,8 @@ pub struct UserSettings {
     pub selected_period: String,
     pub display_currency: String,
     pub selected_forex_pairs: Vec<String>,
+    pub forex_spotlight_three: [String; 3],
+    pub disabled_forex_chart_pairs: Vec<String>,
     pub selected_interest_countries: Vec<String>,
     pub selected_macro_countries: Vec<String>,
     pub macro_start_year: i32,
@@ -21,7 +39,7 @@ pub struct UserSettings {
 
 impl Default for UserSettings {
     fn default() -> Self {
-        Self {
+        let mut cfg = Self {
             favorite_tickers: vec![
                 "PETR4".into(),
                 "VALE3".into(),
@@ -43,25 +61,20 @@ impl Default for UserSettings {
                 "USDJPY=X".into(),
                 "USDCNY=X".into(),
             ],
-            selected_interest_countries: vec![
-                "BR".into(),
-                "US".into(),
-                "EU".into(),
-                "GB".into(),
-                "JP".into(),
+            forex_spotlight_three: [
+                "USDBRL=X".into(),
+                "EURUSD=X".into(),
+                "USDJPY=X".into(),
             ],
-            selected_macro_countries: vec![
-                "BRA".into(),
-                "USA".into(),
-                "CHN".into(),
-                "DEU".into(),
-                "GBR".into(),
-                "JPN".into(),
-            ],
+            disabled_forex_chart_pairs: Vec::new(),
+            selected_interest_countries: Vec::new(),
+            selected_macro_countries: Vec::new(),
             macro_start_year: 2018,
             macro_end_year: 2024,
             use_cache: true,
-        }
+        };
+        cfg.sincronizar_paises_com_moedas();
+        cfg
     }
 }
 
@@ -71,11 +84,65 @@ impl UserSettings {
         PathBuf::from("config").join("user_settings.json")
     }
 
+    /// Sincroniza automaticamente os países das Abas (c) Taxas de Juros e (d) Socioeconomia (WB)
+    /// para refletirem exatamente os países das moedas selecionadas na Aba (b) Moedas & Dólar (DXY).
+    pub fn sincronizar_paises_com_moedas(&mut self) {
+        let mut juros_paises = vec!["US".to_string()];
+        let mut macro_paises = vec!["USA".to_string()];
+
+        for par in &self.selected_forex_pairs {
+            for &(ticker_cat, _nome, cod_juros, cod_wb) in CATALOGO_MOEDAS_PAISES {
+                if par.eq_ignore_ascii_case(ticker_cat) {
+                    if !juros_paises.iter().any(|c| c == cod_juros) {
+                        juros_paises.push(cod_juros.to_string());
+                    }
+                    if !macro_paises.iter().any(|c| c == cod_wb) {
+                        macro_paises.push(cod_wb.to_string());
+                    }
+                }
+            }
+        }
+
+        self.selected_interest_countries = juros_paises;
+        self.selected_macro_countries = macro_paises;
+
+        // Garante que as 3 moedas em destaque pertençam às moedas selecionadas (ou "" para Nenhum)
+        let disponiveis: Vec<String> = self
+            .selected_forex_pairs
+            .iter()
+            .filter(|p| !p.eq_ignore_ascii_case("DX-Y.NYB"))
+            .cloned()
+            .collect();
+
+        for i in 0..3 {
+            let atual = &self.forex_spotlight_three[i];
+            if !atual.is_empty() && !disponiveis.iter().any(|d| d.eq_ignore_ascii_case(atual)) {
+                self.forex_spotlight_three[i] = disponiveis.get(i).cloned().unwrap_or_default();
+            }
+        }
+    }
+
+    /// Conta quantas moedas (excluindo o índice DXY) estão cadastradas na carteira cambial (limite: 10).
+    pub fn total_moedas_sem_dxy(&self) -> usize {
+        self.selected_forex_pairs
+            .iter()
+            .filter(|p| !p.eq_ignore_ascii_case("DX-Y.NYB"))
+            .count()
+    }
+
     /// Carrega as configurações do disco ou retorna o padrão caso o arquivo não exista.
     pub fn carregar() -> Self {
         let path = Self::caminho_arquivo();
         if let Ok(conteudo) = fs::read_to_string(&path) {
-            if let Ok(cfg) = serde_json::from_str::<UserSettings>(&conteudo) {
+            if let Ok(mut cfg) = serde_json::from_str::<UserSettings>(&conteudo) {
+                if !cfg
+                    .selected_forex_pairs
+                    .iter()
+                    .any(|p| p.eq_ignore_ascii_case("DX-Y.NYB"))
+                {
+                    cfg.selected_forex_pairs.insert(0, "DX-Y.NYB".to_string());
+                }
+                cfg.sincronizar_paises_com_moedas();
                 return cfg;
             }
         }
@@ -95,4 +162,3 @@ impl UserSettings {
         fs::write(&path, json_str).map_err(|e| format!("Erro ao gravar configurações: {e}"))
     }
 }
-

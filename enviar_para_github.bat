@@ -25,17 +25,22 @@ git remote add origin "%REPO_URL%"
 
 :FAZER_COMMIT_E_PUSH
 echo.
-echo [1/3] Adicionando alteracoes ao controle de versao Git...
+echo [1/4] Garantindo a tag da Versao 0.1 (v0.1) no commit inicial...
+git rev-parse v0.1 >nul 2>nul
+if errorlevel 1 git tag -a v0.1 -m "Versao 0.1 - Release Inicial Congelada" HEAD >nul 2>nul
+
+echo [2/4] Adicionando alteracoes da Versao 0.2 ao controle de versao Git...
 git add .
 
-echo [2/3] Gravando commit...
-git commit -m "Atualiza plataforma DAX Economia (Rust egui + Python Data Engine)" >nul 2>nul
+echo [3/4] Gravando commit e tag da Versao 0.2 (v0.2)...
+git commit -m "Release v0.2: melhorias abas (b)/(c)/(d), sincronizacao de paises, legendas abaixo dos graficos e layout corrigido" >nul 2>nul
+git tag -f -a v0.2 -m "Versao 0.2 - Melhorias Macro, Moedas, Juros, Legendas e Layout"
 
-echo [3/3] Enviando para o GitHub [branch main]...
+echo [4/4] Enviando codigo e tags (v0.1 e v0.2) para o GitHub [branch main]...
 git branch -M main
-git push -u origin main
+git push -u origin main --tags
 echo.
-echo Concluido! Verifique seu repositorio no GitHub.
+echo Concluido! A Versao 0.1 (tag v0.1) e a Versao 0.2 (tag v0.2) foram enviadas ao GitHub.
 pause
 exit /b 0
 

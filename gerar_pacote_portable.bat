@@ -22,6 +22,8 @@ mkdir "dist\DAX_Economia_Portable\config"
 mkdir "dist\DAX_Economia_Portable\data"
 
 copy /y "target_portable\release\dax_economia_desktop.exe" "dist\DAX_Economia_Portable\DAX_Economia.exe" >nul
+copy /y "target_portable\release\dax_economia_desktop.exe" "DAX_Economia_v0.2.exe" >nul
+copy /y "target_portable\release\dax_economia_desktop.exe" "DAX_Economia.exe" >nul
 copy /y "python_engine\*.py" "dist\DAX_Economia_Portable\python_engine\" >nul
 copy /y "config\user_settings.json" "dist\DAX_Economia_Portable\config\" >nul
 copy /y "requirements.txt" "dist\DAX_Economia_Portable\" >nul
@@ -32,7 +34,7 @@ echo [3/4] Criando inicializador rapido da versao Portable...
 (
 echo @echo off
 echo chcp 65001 ^>nul
-echo title DAX Economia Portable
+echo title DAX Economia Portable v0.2
 echo cd /d "%%~dp0"
 echo if exist ".venv\Scripts\python.exe" goto ABRIR_APP
 echo echo Preparando motor de dados Python pela primeira vez...
@@ -42,15 +44,17 @@ echo :ABRIR_APP
 echo start "" "DAX_Economia.exe"
 ) > "dist\DAX_Economia_Portable\Iniciar_DAX_Economia.bat"
 
-echo [4/4] Compactando arquivo final dist\DAX_Economia_Portable_Win11.zip...
-if exist "dist\DAX_Economia_Portable_Win11.zip" del /f /q "dist\DAX_Economia_Portable_Win11.zip"
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\DAX_Economia_Portable\*' -DestinationPath 'dist\DAX_Economia_Portable_Win11.zip' -Force"
+echo [4/4] Compactando arquivo final dist\DAX_Economia_v0.2_Portable_Win11.zip...
+if exist "dist\DAX_Economia_v0.2_Portable_Win11.zip" del /f /q "dist\DAX_Economia_v0.2_Portable_Win11.zip"
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\DAX_Economia_Portable\*' -DestinationPath 'dist\DAX_Economia_v0.2_Portable_Win11.zip' -Force"
+copy /y "dist\DAX_Economia_v0.2_Portable_Win11.zip" "dist\DAX_Economia_Portable_Win11.zip" >nul
 
 echo.
 echo ============================================================================
-echo   PACOTE PORTABLE GERADO COM SUCESSO!
+echo   PACOTE PORTABLE v0.2 GERADO COM SUCESSO!
 echo   Pasta:   E:\AI\Economia\dist\DAX_Economia_Portable
-echo   Arquivo: E:\AI\Economia\dist\DAX_Economia_Portable_Win11.zip
+echo   Arquivo: E:\AI\Economia\dist\DAX_Economia_v0.2_Portable_Win11.zip
+echo   (O pacote anterior dist\DAX_Economia_v0.1_Portable_Win11.zip foi mantido!)
 echo ============================================================================
 pause
 exit /b 0

@@ -1,6 +1,7 @@
 """
-Módulo de Variáveis Socioeconômicas Internacionais (World Bank API).
-Consulta `api.worldbank.org` via `requests` / `pandas_datareader.wb` para comparar:
+Módulo de Variáveis Socioeconômicas Internacionais (World Bank API) — DAX v0.2.
+Sincronizado com todos os países das moedas selecionadas na Aba (b) Moedas & Dólar (DXY).
+Consulta `api.worldbank.org` para comparar:
 PIB, PIB per capita, Inflação (CPI), Desemprego, Taxa de Câmbio Oficial e População.
 """
 
@@ -64,16 +65,19 @@ INDICADORES_WB: dict[str, dict[str, Any]] = {
 }
 
 PAISES_WB: dict[str, str] = {
-    "BRA": "Brasil",
     "USA": "Estados Unidos",
-    "CHN": "China",
-    "DEU": "Alemanha",
+    "BRA": "Brasil",
+    "DEU": "Zona do Euro / Alemanha",
     "GBR": "Reino Unido",
     "JPN": "Japão",
+    "CHN": "China",
+    "CHE": "Suíça",
+    "CAN": "Canadá",
+    "AUS": "Austrália",
+    "MEX": "México",
+    "ARG": "Argentina",
     "IND": "Índia",
     "FRA": "França",
-    "CAN": "Canadá",
-    "MEX": "México",
 }
 
 # Dados históricos reais do World Bank para contingência imediata caso haja atraso/queda da API
@@ -125,6 +129,54 @@ CONTINGENCIA_WB: dict[str, dict[str, list[tuple[int, float]]]] = {
         "unemployment": [(2018, 2.40), (2019, 2.40), (2020, 2.80), (2021, 2.80), (2022, 2.60), (2023, 2.60), (2024, 2.50)],
         "exchange_rate": [(2018, 110.4), (2019, 109.0), (2020, 106.8), (2021, 109.8), (2022, 131.5), (2023, 140.5), (2024, 151.8)],
         "population_mi": [(2018, 126.8), (2019, 126.6), (2020, 126.3), (2021, 125.7), (2022, 125.1), (2023, 124.5), (2024, 124.0)],
+    },
+    "CHE": {
+        "gdp_total_bi": [(2018, 725.5), (2019, 721.4), (2020, 741.9), (2021, 813.4), (2022, 818.4), (2023, 884.9), (2024, 938.5)],
+        "gdp_per_capita": [(2018, 85217.0), (2019, 84121.0), (2020, 85897.0), (2021, 93446.0), (2022, 93259.0), (2023, 99994.0), (2024, 105669.0)],
+        "inflation_cpi": [(2018, 0.94), (2019, 0.36), (2020, -0.73), (2021, 0.58), (2022, 2.84), (2023, 2.14), (2024, 1.10)],
+        "unemployment": [(2018, 4.71), (2019, 4.39), (2020, 4.82), (2021, 5.10), (2022, 4.30), (2023, 4.05), (2024, 4.20)],
+        "exchange_rate": [(2018, 0.98), (2019, 0.99), (2020, 0.94), (2021, 0.91), (2022, 0.95), (2023, 0.90), (2024, 0.88)],
+        "population_mi": [(2018, 8.51), (2019, 8.57), (2020, 8.64), (2021, 8.70), (2022, 8.78), (2023, 8.85), (2024, 8.92)],
+    },
+    "CAN": {
+        "gdp_total_bi": [(2018, 1725.3), (2019, 1743.8), (2020, 1655.7), (2021, 2007.5), (2022, 2161.5), (2023, 2140.1), (2024, 2241.3)],
+        "gdp_per_capita": [(2018, 46548.0), (2019, 46374.0), (2020, 43537.0), (2021, 52496.0), (2022, 55509.0), (2023, 53371.0), (2024, 54866.0)],
+        "inflation_cpi": [(2018, 2.27), (2019, 1.95), (2020, 0.72), (2021, 3.40), (2022, 6.80), (2023, 3.88), (2024, 2.40)],
+        "unemployment": [(2018, 5.84), (2019, 5.69), (2020, 9.66), (2021, 7.53), (2022, 5.28), (2023, 5.37), (2024, 6.35)],
+        "exchange_rate": [(2018, 1.30), (2019, 1.33), (2020, 1.34), (2021, 1.25), (2022, 1.30), (2023, 1.35), (2024, 1.37)],
+        "population_mi": [(2018, 37.07), (2019, 37.60), (2020, 38.03), (2021, 38.24), (2022, 38.93), (2023, 40.10), (2024, 40.85)],
+    },
+    "AUS": {
+        "gdp_total_bi": [(2018, 1428.5), (2019, 1392.2), (2020, 1326.9), (2021, 1552.7), (2022, 1692.9), (2023, 1723.8), (2024, 1790.3)],
+        "gdp_per_capita": [(2018, 57180.0), (2019, 54941.0), (2020, 51720.0), (2021, 60444.0), (2022, 65099.0), (2023, 64711.0), (2024, 66589.0)],
+        "inflation_cpi": [(2018, 1.91), (2019, 1.61), (2020, 0.85), (2021, 2.86), (2022, 6.59), (2023, 5.60), (2024, 3.10)],
+        "unemployment": [(2018, 5.30), (2019, 5.16), (2020, 6.46), (2021, 5.12), (2022, 3.73), (2023, 3.69), (2024, 4.10)],
+        "exchange_rate": [(2018, 1.34), (2019, 1.44), (2020, 1.45), (2021, 1.33), (2022, 1.44), (2023, 1.51), (2024, 1.52)],
+        "population_mi": [(2018, 24.98), (2019, 25.34), (2020, 25.66), (2021, 25.69), (2022, 26.01), (2023, 26.64), (2024, 26.89)],
+    },
+    "MEX": {
+        "gdp_total_bi": [(2018, 1222.4), (2019, 1269.0), (2020, 1090.5), (2021, 1313.1), (2022, 1463.3), (2023, 1788.9), (2024, 1848.1)],
+        "gdp_per_capita": [(2018, 9857.0), (2019, 10145.0), (2020, 8655.0), (2021, 10361.0), (2022, 11477.0), (2023, 13926.0), (2024, 14276.0)],
+        "inflation_cpi": [(2018, 4.90), (2019, 3.64), (2020, 3.40), (2021, 5.69), (2022, 7.90), (2023, 5.53), (2024, 4.70)],
+        "unemployment": [(2018, 3.28), (2019, 3.48), (2020, 4.44), (2021, 4.09), (2022, 3.26), (2023, 2.77), (2024, 2.70)],
+        "exchange_rate": [(2018, 19.24), (2019, 19.26), (2020, 21.49), (2021, 20.28), (2022, 20.13), (2023, 17.76), (2024, 18.45)],
+        "population_mi": [(2018, 124.0), (2019, 125.1), (2020, 126.0), (2021, 126.7), (2022, 127.5), (2023, 128.5), (2024, 129.4)],
+    },
+    "ARG": {
+        "gdp_total_bi": [(2018, 524.8), (2019, 447.8), (2020, 385.5), (2021, 487.9), (2022, 631.1), (2023, 640.6), (2024, 621.8)],
+        "gdp_per_capita": [(2018, 11795.0), (2019, 9963.0), (2020, 8500.0), (2021, 10651.0), (2022, 13650.0), (2023, 13730.0), (2024, 13210.0)],
+        "inflation_cpi": [(2018, 34.28), (2019, 53.55), (2020, 42.02), (2021, 48.41), (2022, 72.43), (2023, 133.49), (2024, 115.00)],
+        "unemployment": [(2018, 9.22), (2019, 9.84), (2020, 11.46), (2021, 8.74), (2022, 6.80), (2023, 6.14), (2024, 7.60)],
+        "exchange_rate": [(2018, 28.09), (2019, 48.15), (2020, 70.64), (2021, 95.08), (2022, 130.79), (2023, 296.26), (2024, 920.00)],
+        "population_mi": [(2018, 44.49), (2019, 44.94), (2020, 45.38), (2021, 45.81), (2022, 46.23), (2023, 46.65), (2024, 47.06)],
+    },
+    "IND": {
+        "gdp_total_bi": [(2018, 2702.9), (2019, 2835.6), (2020, 2674.9), (2021, 3167.3), (2022, 3353.5), (2023, 3549.9), (2024, 3889.1)],
+        "gdp_per_capita": [(2018, 1974.0), (2019, 2050.0), (2020, 1913.0), (2021, 2238.0), (2022, 2347.0), (2023, 2485.0), (2024, 2698.0)],
+        "inflation_cpi": [(2018, 3.94), (2019, 3.73), (2020, 6.62), (2021, 5.13), (2022, 6.70), (2023, 5.65), (2024, 5.20)],
+        "unemployment": [(2018, 7.65), (2019, 6.51), (2020, 7.86), (2021, 6.38), (2022, 4.82), (2023, 4.17), (2024, 4.20)],
+        "exchange_rate": [(2018, 68.39), (2019, 70.42), (2020, 74.10), (2021, 73.92), (2022, 78.60), (2023, 82.60), (2024, 83.80)],
+        "population_mi": [(2018, 1369.0), (2019, 1383.1), (2020, 1396.4), (2021, 1407.6), (2022, 1417.2), (2023, 1428.6), (2024, 1441.7)],
     },
 }
 
@@ -187,13 +239,17 @@ def consultar_indicadores_socioeconomicos(
     entre os países selecionados (PIB, PIB per capita, CPI, Desemprego, Câmbio e População).
     """
     if not paises:
-        paises = ["BRA", "USA", "CHN", "DEU", "GBR", "JPN"]
+        paises = ["USA", "BRA", "DEU", "GBR", "JPN", "CHN"]
 
-    codigos = [c.strip().upper() for c in paises if c.strip().upper() in PAISES_WB]
+    codigos = []
+    for p in paises:
+        c = p.strip().upper()
+        if c in PAISES_WB and c not in codigos:
+            codigos.append(c)
     if not codigos:
-        codigos = ["BRA", "USA", "CHN", "DEU", "GBR", "JPN"]
+        codigos = ["USA", "BRA", "DEU", "GBR", "JPN", "CHN"]
 
-    cache_key = f"worldbank_macro_{'_'.join(sorted(codigos))}_{start_year}_{end_year}"
+    cache_key = f"worldbank_macro_v2_{'_'.join(codigos)}_{start_year}_{end_year}"
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=7200)
         if cached:
@@ -212,7 +268,6 @@ def consultar_indicadores_socioeconomicos(
             start_year=start_year,
             end_year=end_year,
         )
-        # Preenche eventuais países sem resposta na API com a base oficial de contingência
         for iso3 in codigos:
             if not series_api.get(iso3):
                 status_fonte = "World Bank Data (Híbrido Cache/Contingência)"
@@ -224,7 +279,6 @@ def consultar_indicadores_socioeconomicos(
                 ]
         dados_por_indicador[chave_ind] = series_api
 
-    # Constrói visão consolidada por país (último valor disponível + série temporal de cada indicador)
     perfis_paises = []
     for iso3 in codigos:
         nome_pais = PAISES_WB.get(iso3, iso3)
@@ -266,4 +320,3 @@ def consultar_indicadores_socioeconomicos(
     }
     salvar_cache(cache_key, "macro_wb", resposta)
     return resposta
-

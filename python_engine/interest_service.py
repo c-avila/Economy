@@ -1,7 +1,7 @@
 """
-Módulo de Taxas de Juros Globais (Bancos Centrais).
-Integra `fredapi` (com chave em variável de ambiente `FRED_API_KEY`),
-`pandas_datareader`, API aberta do Banco Central do Brasil (SGS) e endpoints CSV do FRED.
+Módulo de Taxas de Juros Globais (Bancos Centrais) — DAX v0.2.
+Suporta todos os países vinculados às moedas selecionadas na Aba (b) Moedas & Dólar (DXY).
+Integra `fredapi`, `pandas_datareader`, API aberta do Banco Central do Brasil (SGS) e endpoints CSV do FRED.
 """
 
 from datetime import datetime
@@ -38,7 +38,7 @@ except ImportError:
 
 from .cache_manager import obter_cache, salvar_cache
 
-# Catálogo de Bancos Centrais e séries oficiais
+# Catálogo completo de Bancos Centrais sincronizado com as moedas da Aba (b)
 CATALOGO_JUROS: dict[str, dict[str, Any]] = {
     "US": {
         "pais": "Estados Unidos",
@@ -72,7 +72,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "EU": {
-        "pais": "Zona do Euro",
+        "pais": "Zona do Euro / Alemanha",
         "banco_central": "Banco Central Europeu (BCE)",
         "nome_taxa": "Taxa Básica BCE / Euribor 3M",
         "serie_solicitada": "GKLIB3M",
@@ -131,6 +131,96 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
             ("2025-06", 3.00),
         ],
     },
+    "CH": {
+        "pais": "Suíça",
+        "banco_central": "Swiss National Bank (SNB)",
+        "nome_taxa": "SNB Policy Rate",
+        "serie_solicitada": "SNB_RATE",
+        "fred_id": "IRSTCI01CHM156N",
+        "moeda": "CHF",
+        "inflacao_atual": 0.80,
+        "historico_ref": [
+            ("2019-06", -0.75), ("2019-12", -0.75), ("2020-06", -0.75), ("2020-12", -0.75),
+            ("2021-06", -0.75), ("2021-12", -0.75), ("2022-06", -0.25), ("2022-12", 1.00),
+            ("2023-06", 1.75), ("2023-12", 1.75), ("2024-06", 1.25), ("2024-12", 0.50),
+            ("2025-06", 0.25),
+        ],
+    },
+    "CA": {
+        "pais": "Canadá",
+        "banco_central": "Bank of Canada (BoC)",
+        "nome_taxa": "BoC Overnight Target Rate",
+        "serie_solicitada": "BOC_RATE",
+        "fred_id": "IRSTCI01CAM156N",
+        "moeda": "CAD",
+        "inflacao_atual": 2.00,
+        "historico_ref": [
+            ("2019-06", 1.75), ("2019-12", 1.75), ("2020-06", 0.25), ("2020-12", 0.25),
+            ("2021-06", 0.25), ("2021-12", 0.25), ("2022-06", 1.50), ("2022-12", 4.25),
+            ("2023-06", 4.75), ("2023-12", 5.00), ("2024-06", 4.75), ("2024-12", 3.25),
+            ("2025-06", 3.00),
+        ],
+    },
+    "AU": {
+        "pais": "Austrália",
+        "banco_central": "Reserve Bank of Australia (RBA)",
+        "nome_taxa": "RBA Cash Rate Target",
+        "serie_solicitada": "RBA_RATE",
+        "fred_id": "IRSTCI01AUM156N",
+        "moeda": "AUD",
+        "inflacao_atual": 2.80,
+        "historico_ref": [
+            ("2019-06", 1.25), ("2019-12", 0.75), ("2020-06", 0.25), ("2020-12", 0.10),
+            ("2021-06", 0.10), ("2021-12", 0.10), ("2022-06", 0.85), ("2022-12", 3.10),
+            ("2023-06", 4.10), ("2023-12", 4.35), ("2024-06", 4.35), ("2024-12", 4.35),
+            ("2025-06", 4.10),
+        ],
+    },
+    "MX": {
+        "pais": "México",
+        "banco_central": "Banco de México (Banxico)",
+        "nome_taxa": "Tasa Objetivo Banxico",
+        "serie_solicitada": "BANXICO",
+        "fred_id": "IRSTCI01MXM156N",
+        "moeda": "MXN",
+        "inflacao_atual": 4.70,
+        "historico_ref": [
+            ("2019-06", 8.25), ("2019-12", 7.25), ("2020-06", 5.00), ("2020-12", 4.25),
+            ("2021-06", 4.25), ("2021-12", 5.50), ("2022-06", 7.75), ("2022-12", 10.50),
+            ("2023-06", 11.25), ("2023-12", 11.25), ("2024-06", 11.00), ("2024-12", 10.00),
+            ("2025-06", 9.50),
+        ],
+    },
+    "AR": {
+        "pais": "Argentina",
+        "banco_central": "Banco Central de la Rep. Argentina (BCRA)",
+        "nome_taxa": "Tasa de Política Monetaria (TNA)",
+        "serie_solicitada": "BCRA_TNA",
+        "fred_id": "IRSTCI01ARM156N",
+        "moeda": "ARS",
+        "inflacao_atual": 115.00,
+        "historico_ref": [
+            ("2019-06", 62.50), ("2019-12", 55.00), ("2020-06", 38.00), ("2020-12", 38.00),
+            ("2021-06", 38.00), ("2021-12", 38.00), ("2022-06", 52.00), ("2022-12", 75.00),
+            ("2023-06", 97.00), ("2023-12", 100.00), ("2024-06", 40.00), ("2024-12", 32.00),
+            ("2025-06", 29.00),
+        ],
+    },
+    "IN": {
+        "pais": "Índia",
+        "banco_central": "Reserve Bank of India (RBI)",
+        "nome_taxa": "RBI Policy Repo Rate",
+        "serie_solicitada": "RBI_REPO",
+        "fred_id": "IRSTCI01INM156N",
+        "moeda": "INR",
+        "inflacao_atual": 5.40,
+        "historico_ref": [
+            ("2019-06", 5.75), ("2019-12", 5.15), ("2020-06", 4.00), ("2020-12", 4.00),
+            ("2021-06", 4.00), ("2021-12", 4.00), ("2022-06", 4.90), ("2022-12", 6.25),
+            ("2023-06", 6.50), ("2023-12", 6.50), ("2024-06", 6.50), ("2024-12", 6.50),
+            ("2025-06", 6.25),
+        ],
+    },
 }
 
 
@@ -144,7 +234,6 @@ def _buscar_serie_fred(fred_id: str, start_year: int = 2019) -> list[dict[str, A
     api_key = os.environ.get("FRED_API_KEY", "").strip()
     start_date = f"{start_year}-01-01"
 
-    # 1. Tentativa via fredapi com variável de ambiente
     if Fred is not None and api_key and api_key != "coloque_sua_chave_fred_aqui_opcional":
         try:
             fred = Fred(api_key=api_key)
@@ -159,7 +248,6 @@ def _buscar_serie_fred(fred_id: str, start_year: int = 2019) -> list[dict[str, A
         except Exception:
             pass
 
-    # 2. Tentativa via pandas_datareader
     if pdr is not None:
         try:
             df = pdr.DataReader(fred_id, "fred", start=start_date)
@@ -173,7 +261,6 @@ def _buscar_serie_fred(fred_id: str, start_year: int = 2019) -> list[dict[str, A
         except Exception:
             pass
 
-    # 3. Tentativa via endpoint CSV aberto do FRED
     try:
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={fred_id}"
         texto_csv = ""
@@ -243,13 +330,17 @@ def consultar_taxas_juros(
     incluindo cálculo de Juro Real ex-post (Taxa Nominal - Inflação CPI).
     """
     if not paises:
-        paises = ["BR", "US", "EU", "GB", "JP", "CN"]
+        paises = ["US", "BR", "EU", "GB", "JP", "CN"]
 
-    codigos = [p.strip().upper() for p in paises if p.strip().upper() in CATALOGO_JUROS]
+    codigos = []
+    for p in paises:
+        c = p.strip().upper()
+        if c in CATALOGO_JUROS and c not in codigos:
+            codigos.append(c)
     if not codigos:
-        codigos = ["BR", "US", "EU", "GB", "JP"]
+        codigos = ["US", "BR", "EU", "GB", "JP"]
 
-    cache_key = f"interest_rates_{'_'.join(sorted(codigos))}_{start_year}"
+    cache_key = f"interest_rates_v2_{'_'.join(codigos)}_{start_year}"
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=3600)
         if cached:
@@ -280,7 +371,6 @@ def consultar_taxas_juros(
         taxa_anterior = historico[-2]["rate"] if len(historico) > 1 else taxa_atual
         variacao_bps = round((taxa_atual - taxa_anterior) * 100.0, 0)
         inflacao = float(meta["inflacao_atual"])
-        # Equação de Fisher aproximada para juro real: ((1 + i)/(1 + pi) - 1) * 100
         juro_real = round((((1.0 + taxa_atual / 100.0) / (1.0 + inflacao / 100.0)) - 1.0) * 100.0, 2)
 
         series_resultado.append(
@@ -313,4 +403,3 @@ def consultar_taxas_juros(
     }
     salvar_cache(cache_key, "interest_rates", resposta)
     return resposta
-
