@@ -4,6 +4,7 @@ Utiliza `yfinance` para buscar até 10 pares cambiais e o índice Dólar (DX-Y.N
 além de realizar conversões de moedas em tempo real e comparações em Base 100.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import math
 from typing import Any
@@ -16,7 +17,7 @@ try:
 except ImportError:
     yf = None
 
-from .cache_manager import obter_cache, salvar_cache
+from .cache_manager import is_offline_mode, obter_cache, salvar_cache
 
 # Catálogo expandido de pares cambiais e Índice Dólar (DXY) com vínculo aos países de Juros (BC) e World Bank
 CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
@@ -306,10 +307,12 @@ def consultar_moedas_e_dxy(
     pares: list[str] | None = None,
     period: str = "1y",
     usar_cache: bool = True,
+    start_date: str = "",
+    end_date: str = "",
 ) -> dict[str, Any]:
     """
-    Consulta cotações históricas e atuais de até 10 moedas frente ao USD e o Índice DXY.
-    Retorna séries temporais nominais e normalizadas (Base 100 no início do período).
+    Queries historical and current quotes for up to 10 currencies vs USD and the DXY Index.
+    Returns nominal and Base-100 normalized time series, supporting custom start/end dates.
     """
     if not pares:
         pares = ["DX-Y.NYB", "USDBRL=X", "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCNY=X"]
@@ -320,31 +323,51 @@ def consultar_moedas_e_dxy(
         if tn not in pares_norm:
             pares_norm.append(tn)
 
-    # Limita a no máximo 10 moedas + DXY para manter visualização limpa conforme especificação
+    # Limit to at most 10 currencies + DXY
     pares_norm = pares_norm[:11]
 
-    cache_key = f"forex_dashboard_v2_{'_'.join(sorted(pares_norm))}_{period}"
-    if usar_cache:
-        cached = obter_cache(cache_key, ttl_seconds=1800)
+    has_custom_dates = bool(start_date.strip() and end_date.strip())
+    range_key = f"{start_date.strip()}_{end_date.strip()}" if has_custom_dates else period
+    cache_key = f"forex_dashboard_v2_{'_'.join(sorted(pares_norm))}_{range_key}"
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=1800, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
             return cached
 
     itens_resultado: list[dict[str, Any]] = []
     status_fonte = "Yahoo Finance API (Online)"
 
-    for yf_ticker in pares_norm:
-        df_hist = pd.DataFrame()
-        if yf is not None:
+    def _fetch_pair_hist(yf_tk: str) -> tuple[str, pd.DataFrame, bool]:
+        df_h = pd.DataFrame()
+        used_fallback = False
+        if yf is not None and not offline:
             try:
-                tk = yf.Ticker(yf_ticker)
-                df_hist = tk.history(period=period, auto_adjust=True)
+                tk = yf.Ticker(yf_tk)
+                if has_custom_dates:
+                    df_h = tk.history(start=start_date.strip(), end=end_date.strip(), auto_adjust=True)
+                else:
+                    df_h = tk.history(period=period, auto_adjust=True)
             except Exception:
-                df_hist = pd.DataFrame()
+                df_h = pd.DataFrame()
 
-        if df_hist is None or df_hist.empty or "Close" not in df_hist:
-            df_hist = _gerar_serie_cambial_contingencia(yf_ticker, period=period)
-            status_fonte = "Resilient Mode (Cache/Fallback)"
+        if df_h is None or df_h.empty or "Close" not in df_h:
+            df_h = _gerar_serie_cambial_contingencia(yf_tk, period="5y" if has_custom_dates else period)
+            if has_custom_dates and not df_h.empty:
+                idx_dates = df_h.index.strftime("%Y-%m-%d")
+                mask = (idx_dates >= start_date.strip()) & (idx_dates <= end_date.strip())
+                if mask.any():
+                    df_h = df_h.loc[mask]
+            used_fallback = True
+        return yf_tk, df_h, used_fallback
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        fetched_pairs = list(executor.map(_fetch_pair_hist, pares_norm))
+
+    for yf_ticker, df_hist, used_fallback in fetched_pairs:
+        if used_fallback:
+            status_fonte = "Offline Mode (Fallback)" if offline else "Resilient Mode (Cache/Fallback)"
 
         df_hist = df_hist.dropna(subset=["Close"]).copy()
         if df_hist.empty:

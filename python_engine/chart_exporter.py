@@ -39,14 +39,22 @@ def exportar_grafico_acao(
     period: str = "1y",
     moeda: str = "ORIGINAL",
     formato: str = "plotly",
+    start_date: str = "",
+    end_date: str = "",
 ) -> dict[str, Any]:
     """
-    Gera um gráfico interativo (Plotly HTML) ou de alta resolução (Matplotlib PNG)
-    com Candlesticks, Médias Móveis (SMA 20 e SMA 50) e Volume para o ativo selecionado.
-    Retorna o caminho absoluto do arquivo gerado para abertura imediata no Windows 11.
+    Generates an interactive (Plotly HTML) or high-resolution (Matplotlib PNG) chart
+    with Candlesticks, Moving Averages (SMA 20 and SMA 50), and Volume for the selected asset.
     """
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    dados = consultar_acao_detalhada(ticker=ticker, period=period, moeda_exibicao=moeda, usar_cache=True)
+    dados = consultar_acao_detalhada(
+        ticker=ticker,
+        period=period,
+        moeda_exibicao=moeda,
+        usar_cache=True,
+        start_date=start_date,
+        end_date=end_date,
+    )
     candles = dados.get("candles", [])
     if not candles:
         return {"status": "error", "message": "No candlestick data available to export."}

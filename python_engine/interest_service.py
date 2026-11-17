@@ -4,6 +4,7 @@ Suporta todos os países vinculados às moedas selecionadas na Aba (b) Moedas & 
 Integra `fredapi`, `pandas_datareader`, API aberta do Banco Central do Brasil (SGS) e endpoints CSV do FRED.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import io
 import json
@@ -36,7 +37,7 @@ try:
 except ImportError:
     pdr = None
 
-from .cache_manager import obter_cache, salvar_cache
+from .cache_manager import is_offline_mode, obter_cache, salvar_cache
 
 # Catálogo completo de Bancos Centrais sincronizado com as moedas da Aba (b)
 CATALOGO_JUROS: dict[str, dict[str, Any]] = {
@@ -323,11 +324,12 @@ def _buscar_selic_bcb(start_year: int = 2019) -> list[dict[str, Any]]:
 def consultar_taxas_juros(
     paises: list[str] | None = None,
     start_year: int = 2019,
+    end_year: int = 2026,
     usar_cache: bool = True,
 ) -> dict[str, Any]:
     """
-    Retorna as séries históricas e taxas atuais de juros básicos dos países selecionados,
-    incluindo cálculo de Juro Real ex-post (Taxa Nominal - Inflação CPI).
+    Returns historical and current policy interest rates for the selected countries,
+    including ex-post Real Interest Rate (Nominal Rate - CPI Inflation).
     """
     if not paises:
         paises = ["US", "BR", "EU", "GB", "JP", "CN"]
@@ -340,32 +342,47 @@ def consultar_taxas_juros(
     if not codigos:
         codigos = ["US", "BR", "EU", "GB", "JP"]
 
-    cache_key = f"interest_rates_v2_{'_'.join(codigos)}_{start_year}"
-    if usar_cache:
-        cached = obter_cache(cache_key, ttl_seconds=3600)
+    cache_key = f"interest_rates_v3_{'_'.join(codigos)}_{start_year}_{end_year}"
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=3600, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
             return cached
 
     series_resultado = []
     status_fonte = "FRED / BCB API (Online)"
 
-    for cod in codigos:
+    def _fetch_country_rate(cod: str) -> tuple[str, list[dict[str, Any]], bool]:
         meta = CATALOGO_JUROS[cod]
         historico: list[dict[str, Any]] = []
+        used_fallback = False
 
-        if cod == "BR":
-            historico = _buscar_selic_bcb(start_year=start_year)
-        if not historico:
-            historico = _buscar_serie_fred(meta["fred_id"], start_year=start_year)
+        if not offline:
+            if cod == "BR":
+                historico = _buscar_selic_bcb(start_year=start_year)
+            if not historico:
+                historico = _buscar_serie_fred(meta["fred_id"], start_year=start_year)
+
+        if historico:
+            historico = [h for h in historico if int(h["date"][:4]) <= end_year]
 
         if not historico:
-            status_fonte = "Official Historical Series (Cache/Fallback)"
+            used_fallback = True
             historico = [
                 {"date": d, "rate": float(v)}
                 for d, v in meta["historico_ref"]
-                if int(d[:4]) >= start_year
+                if start_year <= int(d[:4]) <= end_year
             ]
+        return cod, historico, used_fallback
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        fetched_rates = list(executor.map(_fetch_country_rate, codigos))
+
+    for cod, historico, used_fallback in fetched_rates:
+        meta = CATALOGO_JUROS[cod]
+        if used_fallback:
+            status_fonte = "Offline Mode (Official Series)" if offline else "Official Historical Series (Cache/Fallback)"
 
         taxa_atual = historico[-1]["rate"] if historico else 0.0
         taxa_anterior = historico[-2]["rate"] if len(historico) > 1 else taxa_atual

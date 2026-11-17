@@ -5,6 +5,7 @@ Consulta `api.worldbank.org` para comparar:
 PIB, PIB per capita, Inflação (CPI), Desemprego, Taxa de Câmbio Oficial e População.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
 import math
@@ -16,7 +17,7 @@ try:
 except ImportError:
     requests = None
 
-from .cache_manager import obter_cache, salvar_cache
+from .cache_manager import is_offline_mode, obter_cache, salvar_cache
 
 # Indicadores oficiais do Banco Mundial (World Development Indicators - WDI)
 INDICADORES_WB: dict[str, dict[str, Any]] = {
@@ -250,33 +251,47 @@ def consultar_indicadores_socioeconomicos(
         codigos = ["USA", "BRA", "DEU", "GBR", "JPN", "CHN"]
 
     cache_key = f"worldbank_macro_v2_{'_'.join(codigos)}_{start_year}_{end_year}"
-    if usar_cache:
-        cached = obter_cache(cache_key, ttl_seconds=7200)
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=7200, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
             return cached
 
     dados_por_indicador: dict[str, dict[str, list[dict[str, Any]]]] = {}
     status_fonte = "World Bank REST API (Online)"
 
-    for chave_ind, meta_ind in INDICADORES_WB.items():
-        series_api = _consultar_wb_api_direto(
-            iso_countries=codigos,
-            wb_code=meta_ind["wb_code"],
-            escala=meta_ind["escala"],
-            casas=meta_ind["casas"],
-            start_year=start_year,
-            end_year=end_year,
-        )
+    def _fetch_indicator(item: tuple[str, dict[str, Any]]) -> tuple[str, dict[str, list[dict[str, Any]]], bool]:
+        chave_ind, meta_ind = item
+        if offline:
+            series_api = {iso3: [] for iso3 in codigos}
+        else:
+            series_api = _consultar_wb_api_direto(
+                iso_countries=codigos,
+                wb_code=meta_ind["wb_code"],
+                escala=meta_ind["escala"],
+                casas=meta_ind["casas"],
+                start_year=start_year,
+                end_year=end_year,
+            )
+        used_fb = False
         for iso3 in codigos:
             if not series_api.get(iso3):
-                status_fonte = "World Bank Data (Hybrid Cache/Fallback)"
+                used_fb = True
                 fallback_lista = CONTINGENCIA_WB.get(iso3, {}).get(chave_ind, [])
                 series_api[iso3] = [
                     {"year": ano, "value": round(float(v), meta_ind["casas"])}
                     for ano, v in fallback_lista
                     if start_year <= ano <= end_year
                 ]
+        return chave_ind, series_api, used_fb
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        results = list(executor.map(_fetch_indicator, list(INDICADORES_WB.items())))
+
+    for chave_ind, series_api, used_fb in results:
+        if used_fb:
+            status_fonte = "Offline Mode (Fallback)" if offline else "World Bank Data (Hybrid Cache/Fallback)"
         dados_por_indicador[chave_ind] = series_api
 
     perfis_paises = []

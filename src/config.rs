@@ -26,6 +26,8 @@ pub struct UserSettings {
     pub favorite_tickers: Vec<String>,
     pub selected_ticker: String,
     pub selected_period: String,
+    pub analysis_start_date: String,
+    pub analysis_end_date: String,
     pub display_currency: String,
     pub selected_forex_pairs: Vec<String>,
     pub forex_spotlight_three: [String; 3],
@@ -35,10 +37,13 @@ pub struct UserSettings {
     pub macro_start_year: i32,
     pub macro_end_year: i32,
     pub use_cache: bool,
+    pub dark_mode: bool,
+    pub offline_mode: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         let mut cfg = Self {
             favorite_tickers: vec![
                 "PETR4".into(),
@@ -52,6 +57,8 @@ impl Default for UserSettings {
             ],
             selected_ticker: "PETR4".into(),
             selected_period: "1y".into(),
+            analysis_start_date: "2020-01-01".into(),
+            analysis_end_date: today,
             display_currency: "ORIGINAL".into(),
             selected_forex_pairs: vec![
                 "DX-Y.NYB".into(),
@@ -69,9 +76,11 @@ impl Default for UserSettings {
             disabled_forex_chart_pairs: Vec::new(),
             selected_interest_countries: Vec::new(),
             selected_macro_countries: Vec::new(),
-            macro_start_year: 2018,
-            macro_end_year: 2024,
+            macro_start_year: 2020,
+            macro_end_year: 2025,
             use_cache: true,
+            dark_mode: true,
+            offline_mode: false,
         };
         cfg.sincronizar_paises_com_moedas();
         cfg
@@ -100,6 +109,27 @@ impl UserSettings {
             }
         }
         PathBuf::from("config").join("user_settings.json")
+    }
+
+    /// Returns the writable exports directory for CSV/HTML/PNG outputs.
+    pub fn exports_dir() -> PathBuf {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                let exe_str = exe.to_string_lossy();
+                if exe_str.contains(".app/Contents/MacOS") {
+                    if let Ok(home) = std::env::var("HOME") {
+                        return PathBuf::from(home)
+                            .join("Library")
+                            .join("Application Support")
+                            .join("DAX_Economy")
+                            .join("data")
+                            .join("exports");
+                    }
+                }
+            }
+        }
+        PathBuf::from("data").join("exports")
     }
 
     /// Sincroniza automaticamente os países das Abas (c) Taxas de Juros e (d) Socioeconomia (WB)

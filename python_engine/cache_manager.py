@@ -94,3 +94,21 @@ def salvar_cache(cache_key: str, category: str, payload: dict[str, Any]) -> None
     except Exception:
         pass
 
+
+def limpar_cache() -> int:
+    """Clears all cached entries in the local SQLite database and returns the count removed."""
+    try:
+        inicializar_banco_cache()
+        with sqlite3.connect(CACHE_DB_PATH, timeout=10.0) as conn:
+            cursor = conn.execute("DELETE FROM api_cache")
+            conn.commit()
+            return int(cursor.rowcount or 0)
+    except Exception:
+        return 0
+
+
+def is_offline_mode() -> bool:
+    """Returns True if DAX_OFFLINE_MODE=1 is set in the environment."""
+    return os.environ.get("DAX_OFFLINE_MODE", "").strip() in ("1", "true", "TRUE", "yes")
+
+

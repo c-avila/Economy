@@ -9,6 +9,7 @@ import sys
 import traceback
 from typing import Any
 
+from .cache_manager import limpar_cache
 from .chart_exporter import exportar_grafico_acao
 from .forex_service import consultar_moedas_e_dxy
 from .interest_service import consultar_taxas_juros
@@ -32,6 +33,9 @@ def executar_comando(args: argparse.Namespace) -> dict[str, Any]:
     usar_cache = not args.no_cache
     acao = args.action.lower().strip()
 
+    start_date = getattr(args, "start_date", "") or ""
+    end_date = getattr(args, "end_date", "") or ""
+
     if acao == "overview":
         favoritos = [x.strip() for x in args.tickers.split(",") if x.strip()] if args.tickers else None
         return consultar_visao_geral_mercado(favoritos=favoritos, usar_cache=usar_cache)
@@ -42,22 +46,39 @@ def executar_comando(args: argparse.Namespace) -> dict[str, Any]:
             period=args.period,
             moeda_exibicao=args.currency,
             usar_cache=usar_cache,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     if acao == "forex":
         pares = [x.strip() for x in args.pairs.split(",") if x.strip()] if args.pairs else None
-        return consultar_moedas_e_dxy(pares=pares, period=args.period, usar_cache=usar_cache)
+        return consultar_moedas_e_dxy(
+            pares=pares,
+            period=args.period,
+            usar_cache=usar_cache,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     if acao == "interest":
         paises = [x.strip() for x in args.countries.split(",") if x.strip()] if args.countries else None
-        return consultar_taxas_juros(paises=paises, start_year=args.start_year, usar_cache=usar_cache)
+        s_year = int(start_date[:4]) if len(start_date) >= 4 and start_date[:4].isdigit() else args.start_year
+        e_year = int(end_date[:4]) if len(end_date) >= 4 and end_date[:4].isdigit() else args.end_year
+        return consultar_taxas_juros(
+            paises=paises,
+            start_year=s_year,
+            end_year=e_year,
+            usar_cache=usar_cache,
+        )
 
     if acao == "macro":
         paises = [x.strip() for x in args.countries.split(",") if x.strip()] if args.countries else None
+        s_year = int(start_date[:4]) if len(start_date) >= 4 and start_date[:4].isdigit() else args.start_year
+        e_year = int(end_date[:4]) if len(end_date) >= 4 and end_date[:4].isdigit() else args.end_year
         return consultar_indicadores_socioeconomicos(
             paises=paises,
-            start_year=args.start_year,
-            end_year=args.end_year,
+            start_year=s_year,
+            end_year=e_year,
             usar_cache=usar_cache,
         )
 
@@ -67,7 +88,17 @@ def executar_comando(args: argparse.Namespace) -> dict[str, Any]:
             period=args.period,
             moeda=args.currency,
             formato=args.format,
+            start_date=start_date,
+            end_date=end_date,
         )
+
+    if acao == "clear_cache":
+        removed = limpar_cache()
+        return {
+            "status": "ok",
+            "removed": removed,
+            "message": f"Local cache cleared ({removed} entries removed).",
+        }
 
     return {
         "status": "error",
@@ -80,12 +111,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Economic and Financial Data Engine (Python <-> Rust)")
     parser.add_argument(
         "action",
-        choices=["overview", "stock", "forex", "interest", "macro", "export_chart"],
+        choices=["overview", "stock", "forex", "interest", "macro", "export_chart", "clear_cache"],
         help="Operation to be executed by the data engine",
     )
     parser.add_argument("--ticker", default="PETR4", help="Stock ticker symbol (e.g., PETR4, VALE3, AAPL, NVDA)")
     parser.add_argument("--tickers", default="", help="Comma-separated list of tickers")
     parser.add_argument("--period", default="1y", help="Historical period (5d, 1mo, 6mo, 1y, 5y)")
+    parser.add_argument("--start-date", default="", help="Optional start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", default="", help="Optional end date (YYYY-MM-DD)")
     parser.add_argument("--currency", default="ORIGINAL", help="Display currency (ORIGINAL, BRL, USD, EUR)")
     parser.add_argument("--pairs", default="DX-Y.NYB,USDBRL=X,EURUSD=X,GBPUSD=X,USDJPY=X,USDCNY=X", help="Forex pairs")
     parser.add_argument("--countries", default="", help="Comma-separated country codes")

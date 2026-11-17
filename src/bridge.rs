@@ -23,14 +23,16 @@ pub enum BridgeMessage {
     InterestLoaded(InterestResponse),
     MacroLoaded(MacroResponse),
     ChartExported(ChartExportResponse),
+    CacheCleared(String),
     Error(String),
 }
 
-/// Gerenciador de chamadas assíncronas para o motor de dados em Python.
+/// Manager for asynchronous calls to the Python data engine.
 pub struct PythonBridge {
     tx: Sender<BridgeMessage>,
     rx: Receiver<BridgeMessage>,
     pub active_tasks: usize,
+    pub offline_mode: bool,
 }
 
 impl Default for PythonBridge {
@@ -46,6 +48,7 @@ impl PythonBridge {
             tx,
             rx,
             active_tasks: 0,
+            offline_mode: false,
         }
     }
 
@@ -153,7 +156,7 @@ impl PythonBridge {
     }
 
     /// Runs `python -m python_engine.cli ...` and returns raw JSON output.
-    fn executar_cli_python(args: &[String]) -> Result<String, String> {
+    fn executar_cli_python(args: &[String], offline_mode: bool) -> Result<String, String> {
         let (working_dir, data_dir) = Self::resolver_diretorios();
         let python_bin = Self::detectar_executavel_python(working_dir.as_deref());
         let mut cmd = Command::new(&python_bin);
@@ -163,6 +166,9 @@ impl PythonBridge {
         if let Some(ref dd) = data_dir {
             let _ = std::fs::create_dir_all(dd);
             cmd.env("DAX_DATA_DIR", dd);
+        }
+        if offline_mode {
+            cmd.env("DAX_OFFLINE_MODE", "1");
         }
         cmd.arg("-m").arg("python_engine.cli").args(args);
         cmd.env("PYTHONIOENCODING", "utf-8");
@@ -210,11 +216,12 @@ impl PythonBridge {
         Ok(json_line)
     }
 
-    /// Solicita o carregamento do Dashboard Geral e Scanner (Dax1, Dax2, Dax4).
+    /// Requests the Market Overview & Scanner (Dax1, Dax2, Dax4).
     pub fn request_overview(&mut self, favoritos: &[String], force_refresh: bool, ctx: egui::Context) {
         self.active_tasks += 1;
         let tx = self.tx.clone();
         let tickers_arg = favoritos.join(",");
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
             let mut args = vec![
@@ -226,7 +233,7 @@ impl PythonBridge {
                 args.push("--no-cache".to_string());
             }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<MarketOverviewResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::OverviewLoaded(resp),
                     Ok(_) => BridgeMessage::Error(format!("Unexpected Overview response: {json_str}")),
@@ -239,11 +246,14 @@ impl PythonBridge {
         });
     }
 
-    /// Solicita análise detalhada OHLCV e múltiplos de uma ação (Dax3).
+    /// Requests detailed OHLCV analysis and multiples for a stock (Dax3).
+    #[allow(clippy::too_many_arguments)]
     pub fn request_stock(
         &mut self,
         ticker: &str,
         period: &str,
+        start_date: &str,
+        end_date: &str,
         currency: &str,
         force_refresh: bool,
         ctx: egui::Context,
@@ -252,7 +262,10 @@ impl PythonBridge {
         let tx = self.tx.clone();
         let ticker_s = ticker.trim().to_uppercase();
         let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
         let curr_s = currency.to_string();
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
             let mut args = vec![
@@ -264,11 +277,17 @@ impl PythonBridge {
                 "--currency".to_string(),
                 curr_s,
             ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
             if force_refresh {
                 args.push("--no-cache".to_string());
             }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<StockDetailResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::StockLoaded(resp),
                     Ok(_) => BridgeMessage::Error(format!("Error querying stock: {json_str}")),
@@ -281,11 +300,13 @@ impl PythonBridge {
         });
     }
 
-    /// Solicita cotações de moedas e Índice Dólar (DXY=).
+    /// Requests FX quotes and US Dollar Index (DXY=).
     pub fn request_forex(
         &mut self,
         pairs: &[String],
         period: &str,
+        start_date: &str,
+        end_date: &str,
         force_refresh: bool,
         ctx: egui::Context,
     ) {
@@ -293,6 +314,9 @@ impl PythonBridge {
         let tx = self.tx.clone();
         let pairs_arg = pairs.join(",");
         let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
             let mut args = vec![
@@ -302,11 +326,17 @@ impl PythonBridge {
                 "--period".to_string(),
                 period_s,
             ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
             if force_refresh {
                 args.push("--no-cache".to_string());
             }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<ForexResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::ForexLoaded(resp),
                     Ok(_) => BridgeMessage::Error(format!("Error querying FX rates: {json_str}")),
@@ -319,17 +349,19 @@ impl PythonBridge {
         });
     }
 
-    /// Solicita taxas de juros dos Bancos Centrais selecionados.
+    /// Requests policy interest rates from selected Central Banks.
     pub fn request_interest(
         &mut self,
         countries: &[String],
         start_year: i32,
+        end_year: i32,
         force_refresh: bool,
         ctx: egui::Context,
     ) {
         self.active_tasks += 1;
         let tx = self.tx.clone();
         let countries_arg = countries.join(",");
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
             let mut args = vec![
@@ -338,12 +370,14 @@ impl PythonBridge {
                 countries_arg,
                 "--start-year".to_string(),
                 start_year.to_string(),
+                "--end-year".to_string(),
+                end_year.to_string(),
             ];
             if force_refresh {
                 args.push("--no-cache".to_string());
             }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<InterestResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::InterestLoaded(resp),
                     Ok(_) => BridgeMessage::Error(format!("Error querying interest rates: {json_str}")),
@@ -356,7 +390,7 @@ impl PythonBridge {
         });
     }
 
-    /// Solicita variáveis socioeconômicas do World Bank API.
+    /// Requests World Bank socioeconomic indicators.
     pub fn request_macro(
         &mut self,
         countries: &[String],
@@ -368,6 +402,7 @@ impl PythonBridge {
         self.active_tasks += 1;
         let tx = self.tx.clone();
         let countries_arg = countries.join(",");
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
             let mut args = vec![
@@ -383,7 +418,7 @@ impl PythonBridge {
                 args.push("--no-cache".to_string());
             }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<MacroResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::MacroLoaded(resp),
                     Ok(_) => BridgeMessage::Error(format!("Error querying World Bank: {json_str}")),
@@ -396,11 +431,14 @@ impl PythonBridge {
         });
     }
 
-    /// Solicita exportação de gráfico interativo Plotly (HTML) ou Matplotlib (PNG).
+    /// Requests interactive Plotly (HTML) or Matplotlib (PNG) chart export.
+    #[allow(clippy::too_many_arguments)]
     pub fn request_export_chart(
         &mut self,
         ticker: &str,
         period: &str,
+        start_date: &str,
+        end_date: &str,
         currency: &str,
         format: &str,
         ctx: egui::Context,
@@ -409,11 +447,14 @@ impl PythonBridge {
         let tx = self.tx.clone();
         let ticker_s = ticker.to_string();
         let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
         let curr_s = currency.to_string();
         let fmt_s = format.to_string();
+        let offline = self.offline_mode;
 
         thread::spawn(move || {
-            let args = vec![
+            let mut args = vec![
                 "export_chart".to_string(),
                 "--ticker".to_string(),
                 ticker_s,
@@ -424,12 +465,43 @@ impl PythonBridge {
                 "--format".to_string(),
                 fmt_s,
             ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
 
-            let msg = match Self::executar_cli_python(&args) {
+            let msg = match Self::executar_cli_python(&args, offline) {
                 Ok(json_str) => match serde_json::from_str::<ChartExportResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::ChartExported(resp),
                     Ok(resp) => BridgeMessage::Error(resp.message),
                     Err(e) => BridgeMessage::Error(format!("Failed to export chart: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Clears the local SQLite cache.
+    pub fn request_clear_cache(&mut self, ctx: egui::Context) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            let args = vec!["clear_cache".to_string()];
+            let msg = match Self::executar_cli_python(&args, false) {
+                Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                    Ok(v) => {
+                        let m = v
+                            .get("message")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("Local cache cleared.")
+                            .to_string();
+                        BridgeMessage::CacheCleared(m)
+                    }
+                    Err(_) => BridgeMessage::CacheCleared("Local cache cleared.".to_string()),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };

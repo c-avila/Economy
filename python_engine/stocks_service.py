@@ -4,6 +4,7 @@ Utiliza `yfinance` para coletar séries históricas OHLCV (Candlesticks),
 médias móveis e indicadores fundamentalistas inspirados nos layouts Dax1 a Dax4.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import math
 import re
@@ -17,7 +18,7 @@ try:
 except ImportError:
     yf = None
 
-from .cache_manager import obter_cache, salvar_cache
+from .cache_manager import is_offline_mode, obter_cache, salvar_cache
 from .forex_service import converter_moeda, obter_taxas_cambio_usd
 
 # Catálogo de empresas de referência (B3 e Globais) para enriquecer o Scanner (Dax4) e Cards (Dax2)
@@ -329,19 +330,24 @@ def consultar_acao_detalhada(
     period: str = "1y",
     moeda_exibicao: str = "ORIGINAL",
     usar_cache: bool = True,
+    start_date: str = "",
+    end_date: str = "",
 ) -> dict[str, Any]:
     """
-    Consulta histórico OHLCV, médias móveis e indicadores estilo StatusInvest (Dax3)
-    para um ativo específico, com suporte à conversão cambial automática.
+    Queries OHLCV history, moving averages, and StatusInvest-style indicators (Dax3)
+    for a specific asset, with automatic currency conversion and custom date range support.
     """
     yf_ticker = normalizar_ticker_acao(ticker)
     moeda_req = moeda_exibicao.upper().strip()
-    cache_key = f"stock_detail_{yf_ticker}_{period}_{moeda_req}"
+    has_custom_dates = bool(start_date.strip() and end_date.strip())
+    range_key = f"{start_date.strip()}_{end_date.strip()}" if has_custom_dates else period
+    cache_key = f"stock_detail_{yf_ticker}_{range_key}_{moeda_req}"
+    offline = is_offline_mode()
 
-    if usar_cache:
-        cached = obter_cache(cache_key, ttl_seconds=1800)
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=1800, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
             return cached
 
     meta = CATALOGO_ACOES.get(yf_ticker, {})
@@ -354,12 +360,14 @@ def consultar_acao_detalhada(
     info_yf: dict[str, Any] = {}
     status_fonte = "Yahoo Finance API (Online)"
 
-    if yf is not None:
+    if yf is not None and not offline:
         try:
             tk = yf.Ticker(yf_ticker)
-            # Para calcular min/max 52 semanas com precisão, buscamos ao menos 1y se o período for curto
-            periodo_download = "1y" if period in ("5d", "1mo", "6mo") else period
-            df_full = tk.history(period=periodo_download, auto_adjust=False)
+            if has_custom_dates:
+                df_full = tk.history(start=start_date.strip(), end=end_date.strip(), auto_adjust=False)
+            else:
+                periodo_download = "1y" if period in ("5d", "1mo", "6mo") else period
+                df_full = tk.history(period=periodo_download, auto_adjust=False)
             if df_full is not None and not df_full.empty:
                 df_hist = df_full
             try:
@@ -370,8 +378,13 @@ def consultar_acao_detalhada(
             df_hist = pd.DataFrame()
 
     if df_hist is None or df_hist.empty or "Close" not in df_hist:
-        df_hist = _gerar_ohlcv_contingencia(yf_ticker, period="1y" if period in ("5d", "1mo", "6mo") else period)
-        status_fonte = "Resilient Mode (Cache/Fallback)"
+        df_hist = _gerar_ohlcv_contingencia(yf_ticker, period="5y" if has_custom_dates else ("1y" if period in ("5d", "1mo", "6mo") else period))
+        if has_custom_dates and not df_hist.empty:
+            idx_dates = df_hist.index.strftime("%Y-%m-%d")
+            mask = (idx_dates >= start_date.strip()) & (idx_dates <= end_date.strip())
+            if mask.any():
+                df_hist = df_hist.loc[mask]
+        status_fonte = "Offline Mode (Fallback)" if offline else "Resilient Mode (Cache/Fallback)"
 
     df_hist = df_hist.dropna(subset=["Close"]).copy()
 
@@ -417,7 +430,7 @@ def consultar_acao_detalhada(
     # Filtra para a janela solicitada pelo usuário para o gráfico
     recorte_map = {"5d": 5, "1mo": 22, "6mo": 126, "1y": 252, "5y": 1260}
     n_recorte = recorte_map.get(period, 252)
-    df_plot = df_hist.tail(n_recorte)
+    df_plot = df_hist if has_custom_dates else df_hist.tail(n_recorte)
 
     candles = []
     for idx, row in df_plot.iterrows():
@@ -644,11 +657,11 @@ def consultar_visao_geral_mercado(
     4. Tabela completa do Scanner de Ações com múltiplos fundamentalistas (Dax4).
     """
     cache_key = "market_overview_dax_global_v2"
-    if usar_cache:
-        # TTL de 600 segundos (10 minutos) conforme solicitado
-        cached = obter_cache(cache_key, ttl_seconds=600)
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Local SQLite Cache (10 min)"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache (10 min)"
             return cached
 
     todos_tickers = list(CATALOGO_ACOES.keys())
@@ -661,9 +674,14 @@ def consultar_visao_geral_mercado(
     cards_ativos: list[dict[str, Any]] = []
     status_fonte = "Yahoo Finance API (Online)"
 
-    for yf_ticker in todos_tickers:
-        detalhe = consultar_acao_detalhada(yf_ticker, period="1mo", moeda_exibicao="ORIGINAL", usar_cache=usar_cache)
-        if detalhe.get("source_status", "").startswith("Resilient"):
+    def _fetch_one(yf_tk: str) -> dict[str, Any]:
+        return consultar_acao_detalhada(yf_tk, period="1mo", moeda_exibicao="ORIGINAL", usar_cache=usar_cache)
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        detalhes = list(executor.map(_fetch_one, todos_tickers))
+
+    for yf_ticker, detalhe in zip(todos_tickers, detalhes):
+        if detalhe.get("source_status", "").startswith(("Resilient", "Offline")):
             status_fonte = detalhe["source_status"]
 
         m = detalhe["metrics"]
