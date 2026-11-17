@@ -49,7 +49,7 @@ def exportar_grafico_acao(
     dados = consultar_acao_detalhada(ticker=ticker, period=period, moeda_exibicao=moeda, usar_cache=True)
     candles = dados.get("candles", [])
     if not candles:
-        return {"status": "error", "message": "Sem dados de candles para exportar."}
+        return {"status": "error", "message": "No candlestick data available to export."}
 
     df = pd.DataFrame(candles)
     short_code = dados.get("short_code", ticker)
@@ -63,8 +63,8 @@ def exportar_grafico_acao(
             shared_xaxes=True,
             vertical_spacing=0.06,
             subplot_titles=(
-                f"{short_code} ({company}) — Preço & Médias Móveis ({curr})",
-                "Volume Financeiro / Negociado",
+                f"{short_code} ({company}) — Price & Moving Averages ({curr})",
+                "Trading Volume",
             ),
             row_width=[0.25, 0.75],
         )
@@ -121,20 +121,20 @@ def exportar_grafico_acao(
 
         fig.update_layout(
             template="plotly_dark",
-            title=f"Análise Técnica & Quantitativa — {short_code} ({period.upper()})",
+            title=f"Technical & Quantitative Analysis — {short_code} ({period.upper()})",
             xaxis_rangeslider_visible=False,
             paper_bgcolor="#0F172A",
             plot_bgcolor="#1E293B",
             height=760,
         )
 
-        arquivo_html = EXPORTS_DIR / f"relatorio_{short_code}_{period}.html"
+        arquivo_html = EXPORTS_DIR / f"report_{short_code}_{period}.html"
         fig.write_html(str(arquivo_html), include_plotlyjs="cdn")
         return {
             "status": "ok",
             "format": "plotly_html",
             "file_path": str(arquivo_html.resolve()),
-            "message": f"Gráfico interativo Plotly salvo em {arquivo_html.name}",
+            "message": f"Interactive Plotly chart saved to {arquivo_html.name}",
         }
 
     if plt is not None:
@@ -147,12 +147,12 @@ def exportar_grafico_acao(
             ax.tick_params(colors="#E2E8F0")
             ax.grid(True, linestyle="--", alpha=0.25, color="#94A3B8")
 
-        ax1.plot(df["date"], df["close"], label=f"Fechamento ({curr})", color="#10B981", linewidth=2.0)
+        ax1.plot(df["date"], df["close"], label=f"Close ({curr})", color="#10B981", linewidth=2.0)
         ax1.plot(df["date"], df["sma20"], label="SMA 20", color="#38BDF8", linewidth=1.3)
         ax1.plot(df["date"], df["sma50"], label="SMA 50", color="#F59E0B", linewidth=1.3)
         ax1.fill_between(df["date"], df["close"], df["close"].min(), color="#10B981", alpha=0.12)
         ax1.set_title(
-            f"{short_code} - {company} ({period.upper()}) em {curr}",
+            f"{short_code} - {company} ({period.upper()}) in {curr}",
             color="#F8FAFC",
             fontsize=13,
             fontweight="bold",
@@ -162,24 +162,24 @@ def exportar_grafico_acao(
         ax2.bar(df["date"], df["volume"], color="#3B82F6", alpha=0.65)
         ax2.set_ylabel("Volume", color="#E2E8F0")
 
-        # Reduz rótulos do eixo X para não sobrepor
+        # Reduce X-axis labels to avoid overlap
         passo = max(1, len(df) // 10)
         ax2.set_xticks(range(0, len(df), passo))
         ax2.set_xticklabels(df["date"].iloc[::passo], rotation=30, ha="right")
 
         plt.tight_layout()
-        arquivo_png = EXPORTS_DIR / f"grafico_{short_code}_{period}.png"
+        arquivo_png = EXPORTS_DIR / f"chart_{short_code}_{period}.png"
         plt.savefig(arquivo_png, dpi=150, facecolor=fig.get_facecolor())
         plt.close(fig)
         return {
             "status": "ok",
             "format": "matplotlib_png",
             "file_path": str(arquivo_png.resolve()),
-            "message": f"Gráfico Matplotlib salvo em {arquivo_png.name}",
+            "message": f"Matplotlib chart saved to {arquivo_png.name}",
         }
 
     return {
         "status": "error",
-        "message": "Bibliotecas Plotly/Matplotlib não encontradas no ambiente Python.",
+        "message": "Plotly/Matplotlib libraries not found in Python environment.",
     }
 

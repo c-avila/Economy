@@ -22,62 +22,62 @@ from .cache_manager import obter_cache, salvar_cache
 INDICADORES_WB: dict[str, dict[str, Any]] = {
     "gdp_total_bi": {
         "wb_code": "NY.GDP.MKTP.CD",
-        "nome": "PIB Nominal Total (US$ Bilhões)",
-        "unidade": "US$ Bi",
+        "nome": "Total Nominal GDP (US$ Billions)",
+        "unidade": "US$ B",
         "escala": 1e-9,
         "casas": 1,
     },
     "gdp_per_capita": {
         "wb_code": "NY.GDP.PCAP.CD",
-        "nome": "PIB per Capita (US$ Correntes)",
+        "nome": "GDP per Capita (Current US$)",
         "unidade": "US$",
         "escala": 1.0,
         "casas": 0,
     },
     "inflation_cpi": {
         "wb_code": "FP.CPI.TOTL.ZG",
-        "nome": "Inflação Anual ao Consumidor (CPI %)",
-        "unidade": "% a.a.",
+        "nome": "Annual Consumer Inflation (CPI %)",
+        "unidade": "% p.a.",
         "escala": 1.0,
         "casas": 2,
     },
     "unemployment": {
         "wb_code": "SL.UEM.TOTL.ZS",
-        "nome": "Taxa de Desemprego (% Força de Trabalho)",
+        "nome": "Unemployment Rate (% of Labor Force)",
         "unidade": "%",
         "escala": 1.0,
         "casas": 2,
     },
     "exchange_rate": {
         "wb_code": "PA.NUS.FCRF",
-        "nome": "Taxa de Câmbio Oficial (UM Local / US$)",
-        "unidade": "UM/US$",
+        "nome": "Official Exchange Rate (LCU / US$)",
+        "unidade": "LCU/US$",
         "escala": 1.0,
         "casas": 2,
     },
     "population_mi": {
         "wb_code": "SP.POP.TOTL",
-        "nome": "População Total (Milhões de Habitantes)",
-        "unidade": "Milhões",
+        "nome": "Total Population (Millions)",
+        "unidade": "Millions",
         "escala": 1e-6,
         "casas": 2,
     },
 }
 
 PAISES_WB: dict[str, str] = {
-    "USA": "Estados Unidos",
-    "BRA": "Brasil",
-    "DEU": "Zona do Euro / Alemanha",
-    "GBR": "Reino Unido",
-    "JPN": "Japão",
+    "USA": "United States",
+    "BRA": "Brazil",
+    "DEU": "Eurozone / Germany",
+    "GBR": "United Kingdom",
+    "JPN": "Japan",
     "CHN": "China",
-    "CHE": "Suíça",
-    "CAN": "Canadá",
-    "AUS": "Austrália",
-    "MEX": "México",
+    "CHE": "Switzerland",
+    "CAN": "Canada",
+    "AUS": "Australia",
+    "MEX": "Mexico",
     "ARG": "Argentina",
-    "IND": "Índia",
-    "FRA": "França",
+    "IND": "India",
+    "FRA": "France",
 }
 
 # Dados históricos reais do World Bank para contingência imediata caso haja atraso/queda da API
@@ -253,7 +253,7 @@ def consultar_indicadores_socioeconomicos(
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=7200)
         if cached:
-            cached["source_status"] = "Cache Local SQLite"
+            cached["source_status"] = "Local SQLite Cache"
             return cached
 
     dados_por_indicador: dict[str, dict[str, list[dict[str, Any]]]] = {}
@@ -270,7 +270,7 @@ def consultar_indicadores_socioeconomicos(
         )
         for iso3 in codigos:
             if not series_api.get(iso3):
-                status_fonte = "World Bank Data (Híbrido Cache/Contingência)"
+                status_fonte = "World Bank Data (Hybrid Cache/Fallback)"
                 fallback_lista = CONTINGENCIA_WB.get(iso3, {}).get(chave_ind, [])
                 series_api[iso3] = [
                     {"year": ano, "value": round(float(v), meta_ind["casas"])}

@@ -41,7 +41,7 @@ from .cache_manager import obter_cache, salvar_cache
 # Catálogo completo de Bancos Centrais sincronizado com as moedas da Aba (b)
 CATALOGO_JUROS: dict[str, dict[str, Any]] = {
     "US": {
-        "pais": "Estados Unidos",
+        "pais": "United States",
         "banco_central": "Federal Reserve (Fed)",
         "nome_taxa": "Fed Funds Effective Rate",
         "serie_solicitada": "DFF",
@@ -56,9 +56,9 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "BR": {
-        "pais": "Brasil",
-        "banco_central": "Banco Central do Brasil (BCB)",
-        "nome_taxa": "Taxa Meta Selic (% a.a.)",
+        "pais": "Brazil",
+        "banco_central": "Central Bank of Brazil (BCB)",
+        "nome_taxa": "Selic Target Rate (% p.a.)",
         "serie_solicitada": "SELIC",
         "fred_id": "IRSTCI01BRM156N",
         "bcb_sgs": 432,
@@ -72,9 +72,9 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "EU": {
-        "pais": "Zona do Euro / Alemanha",
-        "banco_central": "Banco Central Europeu (BCE)",
-        "nome_taxa": "Taxa Básica BCE / Euribor 3M",
+        "pais": "Eurozone / Germany",
+        "banco_central": "European Central Bank (ECB)",
+        "nome_taxa": "ECB Policy Rate / Euribor 3M",
         "serie_solicitada": "GKLIB3M",
         "fred_id": "ECBDFR",
         "moeda": "EUR",
@@ -87,7 +87,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "GB": {
-        "pais": "Reino Unido",
+        "pais": "United Kingdom",
         "banco_central": "Bank of England (BoE)",
         "nome_taxa": "BoE Official Bank Rate",
         "serie_solicitada": "GBRBOE1M",
@@ -102,7 +102,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "JP": {
-        "pais": "Japão",
+        "pais": "Japan",
         "banco_central": "Bank of Japan (BoJ / JCC)",
         "nome_taxa": "BoJ Call Rate & JCC Target",
         "serie_solicitada": "JCC_BOJ",
@@ -132,7 +132,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "CH": {
-        "pais": "Suíça",
+        "pais": "Switzerland",
         "banco_central": "Swiss National Bank (SNB)",
         "nome_taxa": "SNB Policy Rate",
         "serie_solicitada": "SNB_RATE",
@@ -147,7 +147,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "CA": {
-        "pais": "Canadá",
+        "pais": "Canada",
         "banco_central": "Bank of Canada (BoC)",
         "nome_taxa": "BoC Overnight Target Rate",
         "serie_solicitada": "BOC_RATE",
@@ -162,7 +162,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "AU": {
-        "pais": "Austrália",
+        "pais": "Australia",
         "banco_central": "Reserve Bank of Australia (RBA)",
         "nome_taxa": "RBA Cash Rate Target",
         "serie_solicitada": "RBA_RATE",
@@ -177,9 +177,9 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "MX": {
-        "pais": "México",
+        "pais": "Mexico",
         "banco_central": "Banco de México (Banxico)",
-        "nome_taxa": "Tasa Objetivo Banxico",
+        "nome_taxa": "Banxico Target Rate",
         "serie_solicitada": "BANXICO",
         "fred_id": "IRSTCI01MXM156N",
         "moeda": "MXN",
@@ -193,8 +193,8 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
     },
     "AR": {
         "pais": "Argentina",
-        "banco_central": "Banco Central de la Rep. Argentina (BCRA)",
-        "nome_taxa": "Tasa de Política Monetaria (TNA)",
+        "banco_central": "Central Bank of Argentina (BCRA)",
+        "nome_taxa": "Monetary Policy Rate (TNA)",
         "serie_solicitada": "BCRA_TNA",
         "fred_id": "IRSTCI01ARM156N",
         "moeda": "ARS",
@@ -207,7 +207,7 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         ],
     },
     "IN": {
-        "pais": "Índia",
+        "pais": "India",
         "banco_central": "Reserve Bank of India (RBI)",
         "nome_taxa": "RBI Policy Repo Rate",
         "serie_solicitada": "RBI_REPO",
@@ -344,7 +344,7 @@ def consultar_taxas_juros(
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=3600)
         if cached:
-            cached["source_status"] = "Cache Local SQLite"
+            cached["source_status"] = "Local SQLite Cache"
             return cached
 
     series_resultado = []
@@ -360,7 +360,7 @@ def consultar_taxas_juros(
             historico = _buscar_serie_fred(meta["fred_id"], start_year=start_year)
 
         if not historico:
-            status_fonte = "Série Histórica Oficial (Cache/Contingência)"
+            status_fonte = "Official Historical Series (Cache/Fallback)"
             historico = [
                 {"date": d, "rate": float(v)}
                 for d, v in meta["historico_ref"]

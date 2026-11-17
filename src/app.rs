@@ -131,12 +131,12 @@ impl DaxEconomiaApp {
             selected_wb_indicator: "gdp_total_bi".to_string(),
             dashboard_mode: DashboardViewMode::CardsDax2,
             scanner_search: String::new(),
-            scanner_country: "Todos os países".to_string(),
+            scanner_country: "All countries".to_string(),
             filter_min_mcap: 0.0,
             filter_max_pe: 100.0,
             filter_min_dy: 0.0,
             filter_min_roe: -50.0,
-            status_message: "Iniciando DAX - Data Analysis Exchange (v0.2)...".into(),
+            status_message: "Starting DAX - Data Analysis Exchange (v0.2)...".into(),
             error_banner: None,
             last_indices_refresh: Instant::now(),
         }
@@ -198,7 +198,7 @@ impl DaxEconomiaApp {
             match msg {
                 BridgeMessage::OverviewLoaded(data) => {
                     self.status_message = format!(
-                        "Visão geral atualizada ({}) — {}",
+                        "Market overview updated ({}) — {}",
                         data.source_status, data.updated_at
                     );
                     self.overview_data = Some(data);
@@ -206,7 +206,7 @@ impl DaxEconomiaApp {
                 }
                 BridgeMessage::StockLoaded(data) => {
                     self.status_message = format!(
-                        "Ação {} carregada em {} ({}) — {}",
+                        "Stock {} loaded in {} ({}) — {}",
                         data.short_code, data.display_currency, data.source_status, data.updated_at
                     );
                     self.stock_data = Some(data);
@@ -214,7 +214,7 @@ impl DaxEconomiaApp {
                 }
                 BridgeMessage::ForexLoaded(data) => {
                     self.status_message = format!(
-                        "Moedas e DXY atualizados ({}) — {}",
+                        "Currencies & DXY updated ({}) — {}",
                         data.source_status, data.updated_at
                     );
                     self.forex_data = Some(data);
@@ -222,7 +222,7 @@ impl DaxEconomiaApp {
                 }
                 BridgeMessage::InterestLoaded(data) => {
                     self.status_message = format!(
-                        "Taxas de juros sincronizadas ({}) — {}",
+                        "Interest rates synchronized ({}) — {}",
                         data.source_status, data.updated_at
                     );
                     self.interest_data = Some(data);
@@ -230,7 +230,7 @@ impl DaxEconomiaApp {
                 }
                 BridgeMessage::MacroLoaded(data) => {
                     self.status_message = format!(
-                        "Dados World Bank sincronizados ({}) — {}",
+                        "World Bank data synchronized ({}) — {}",
                         data.source_status, data.updated_at
                     );
                     self.macro_data = Some(data);
@@ -244,7 +244,7 @@ impl DaxEconomiaApp {
                 }
                 BridgeMessage::Error(err) => {
                     self.error_banner = Some(err.clone());
-                    self.status_message = "Atenção: verifique o aviso exibido no topo.".into();
+                    self.status_message = "Attention: check the notice displayed at the top.".into();
                 }
             }
         }
@@ -261,14 +261,14 @@ impl DaxEconomiaApp {
 
         ui.horizontal(|ui| {
             ui.label(
-                RichText::new("🌐 ÍNDICES DAS PRINCIPAIS BOLSAS MUNDIAIS")
+                RichText::new("🌐 MAJOR GLOBAL STOCK MARKET INDICES")
                     .size(12.0)
                     .strong()
                     .color(ACCENT_CYAN),
             );
             ui.label(
                 RichText::new(
-                    "(Brasil • Wall Street • Nasdaq • Japão • China • Alemanha • Inglaterra • França • Espanha • Argentina)",
+                    "(Brazil • Wall Street • Nasdaq • Japan • China • Germany • UK • France • Spain • Argentina)",
                 )
                 .size(11.0)
                 .color(TEXT_MUTED),
@@ -277,12 +277,12 @@ impl DaxEconomiaApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .button(
-                        RichText::new("🔄 Atualizar Agora")
+                        RichText::new("🔄 Refresh Now")
                             .size(12.0)
                             .strong()
                             .color(GREEN_UP),
                     )
-                    .on_hover_text("Atualiza imediatamente os índices das bolsas mundiais e demais cotações")
+                    .on_hover_text("Immediately refresh global stock market indices and all quotes")
                     .clicked()
                 {
                     self.last_indices_refresh = Instant::now();
@@ -305,7 +305,7 @@ impl DaxEconomiaApp {
                     .unwrap_or("--:--:--");
                 ui.label(
                     RichText::new(format!(
-                        "⏱ Auto (10 min): {:02}:{:02}  |  Última: {}",
+                        "⏱ Auto (10 min): {:02}:{:02}  |  Last: {}",
                         min_rest, seg_rest, ultima_hora
                     ))
                     .size(11.0)
@@ -347,7 +347,7 @@ impl DaxEconomiaApp {
                                                     .frame(false),
                                                 )
                                                 .on_hover_text(format!(
-                                                    "Clique para abrir o gráfico detalhado de {} ({})",
+                                                    "Click to open detailed chart for {} ({})",
                                                     item.code, item.subtitle
                                                 ))
                                                 .clicked()
@@ -362,8 +362,7 @@ impl DaxEconomiaApp {
                                                         if item.change_pct > 0.0 { "+" } else { "" };
                                                     ui.label(
                                                         RichText::new(
-                                                            format!("{sinal}{:.2}%", item.change_pct)
-                                                                .replace('.', ","),
+                                                            format!("{sinal}{:.2}%", item.change_pct),
                                                         )
                                                         .size(11.5)
                                                         .strong()
@@ -405,7 +404,7 @@ impl DaxEconomiaApp {
                     } else {
                         ui.label(
                             RichText::new(
-                                "Carregando bolsas mundiais (IBOV, Wall St, Nasdaq, Nikkei, Xangai, DAX, FTSE, CAC, IBEX, Merval)...",
+                                "Loading global stock markets (IBOV, Wall St, Nasdaq, Nikkei, Shanghai, DAX, FTSE, CAC, IBEX, Merval)...",
                             )
                             .color(TEXT_MUTED),
                         );
@@ -449,7 +448,7 @@ impl DaxEconomiaApp {
                 .color(TEXT_LIGHT),
         );
         ui.label(
-            RichText::new("Ações • Câmbio DXY • Juros • Macro")
+            RichText::new("Equities • FX DXY • Rates • Macro")
                 .size(11.0)
                 .color(TEXT_MUTED),
         );
@@ -461,27 +460,27 @@ impl DaxEconomiaApp {
             (
                 ActiveTab::DashboardScanner,
                 "⚡ (e) Dashboard & Scanner",
-                "Altas/Baixas (Dax1), Cards (Dax2) e Stocks Scanner (Dax4)",
+                "Gainers/Losers (Dax1), Asset Cards (Dax2) & Stocks Scanner (Dax4)",
             ),
             (
                 ActiveTab::Stocks,
-                "📈 (a) Ações & Candles",
-                "Análise OHLCV, Candlesticks, Médias Móveis e Múltiplos (Dax3)",
+                "📈 (a) Equities & Candles",
+                "OHLCV Analysis, Candlesticks, Moving Averages & Multiples (Dax3)",
             ),
             (
                 ActiveTab::Forex,
-                "💵 (b) Moedas & Dólar (DXY)",
-                "Até 10 moedas, 3 destaques vs USD, filtro de curvas e DXY=",
+                "💵 (b) Currencies & DXY",
+                "Up to 10 currencies, 3 spotlights vs USD, curve filter & DXY=",
             ),
             (
                 ActiveTab::InterestRates,
-                "🏦 (c) Taxas de Juros (BCs)",
-                "Taxas atuais de todos os países selecionados em (b) + Juro Real",
+                "🏦 (c) Interest Rates (CBs)",
+                "Current policy rates for all countries selected in (b) + Real Rate",
             ),
             (
                 ActiveTab::MacroSocioeconomic,
-                "🌍 (d) Socioeconomia (WB)",
-                "PIB, PIB per capita, Inflação, Desemprego, Câmbio e População",
+                "🌍 (d) Macroeconomics (WB)",
+                "GDP, GDP per capita, Inflation, Unemployment, Exchange Rate & Population",
             ),
         ];
 
@@ -527,22 +526,22 @@ impl DaxEconomiaApp {
         ui.add_space(6.0);
 
         ui.label(
-            RichText::new("⭐ Ativos Favoritos (Clique ✖ p/ remover)")
+            RichText::new("⭐ Favorite Assets (Click ✖ to remove)")
                 .size(11.5)
                 .strong()
                 .color(ACCENT_CYAN),
         );
         ui.add_space(4.0);
 
-        // Campo rápido para inserir novo favorito direto na barra lateral
+        // Quick input to add a new favorite directly in the sidebar
         ui.horizontal(|ui| {
             let resp = ui.add(
                 egui::TextEdit::singleline(&mut self.new_fav_input)
                     .desired_width(155.0)
-                    .hint_text("Novo (ex: WEGE3)"),
+                    .hint_text("New (e.g. WEGE3)"),
             );
             let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if (enter || ui.button("➕").on_hover_text("Adicionar aos favoritos").clicked())
+            if (enter || ui.button("➕").on_hover_text("Add to favorites").clicked())
                 && !self.new_fav_input.trim().is_empty()
             {
                 let novo = self.new_fav_input.trim().to_uppercase();
@@ -601,7 +600,7 @@ impl DaxEconomiaApp {
                                         }),
                                     );
                                     if btn_open
-                                        .on_hover_text(format!("Abrir análise de {fav}"))
+                                        .on_hover_text(format!("Open analysis for {fav}"))
                                         .clicked()
                                     {
                                         ticker_clicado = Some(fav.clone());
@@ -619,7 +618,7 @@ impl DaxEconomiaApp {
                                     );
                                     if btn_del
                                         .on_hover_text(format!(
-                                            "Remover {fav} dos Ativos Favoritos"
+                                            "Remove {fav} from Favorite Assets"
                                         ))
                                         .clicked()
                                     {
@@ -637,7 +636,7 @@ impl DaxEconomiaApp {
                 .favorite_tickers
                 .retain(|f| !f.eq_ignore_ascii_case(&rem));
             let _ = self.settings.salvar();
-            self.status_message = format!("Ativo '{rem}' removido dos favoritos.");
+            self.status_message = format!("Asset '{rem}' removed from favorites.");
         }
 
         if let Some(tk) = ticker_clicado {
@@ -648,7 +647,7 @@ impl DaxEconomiaApp {
         ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
             ui.add_space(4.0);
             ui.label(
-                RichText::new("🔒 LGPD: Dados 100% locais (SQLite + JSON)")
+                RichText::new("🔒 Privacy: 100% local data (SQLite + JSON)")
                     .size(10.0)
                     .color(TEXT_MUTED),
             );
@@ -657,7 +656,7 @@ impl DaxEconomiaApp {
                     ui.spinner();
                     ui.label(
                         RichText::new(format!(
-                            "Processando {} tarefa(s)...",
+                            "Processing {} task(s)...",
                             self.bridge.active_tasks
                         ))
                         .size(11.0)
@@ -695,14 +694,14 @@ impl DaxEconomiaApp {
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("🔍 Ativo / Ticker:").strong());
+                ui.label(RichText::new("🔍 Asset / Ticker:").strong());
                 let resp_input = ui.add(
                     egui::TextEdit::singleline(&mut self.ticker_input)
                         .desired_width(110.0)
-                        .hint_text("Ex: PETR4, AAPL"),
+                        .hint_text("e.g. PETR4, AAPL"),
                 );
                 if (resp_input.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    || ui.button(RichText::new("Consultar").strong()).clicked()
+                    || ui.button(RichText::new("Lookup").strong()).clicked()
                 {
                     let tk = self.ticker_input.clone();
                     self.selecionar_acao(&tk, ctx);
@@ -715,9 +714,9 @@ impl DaxEconomiaApp {
                     .iter()
                     .any(|f| f.eq_ignore_ascii_case(&tk_upper));
                 let label_fav = if ja_favorito {
-                    "★ Remover Favorito"
+                    "★ Remove Favorite"
                 } else {
-                    "☆ Adicionar Favorito"
+                    "☆ Add Favorite"
                 };
                 if ui.button(label_fav).clicked() {
                     if ja_favorito {
@@ -731,13 +730,13 @@ impl DaxEconomiaApp {
                 }
 
                 ui.separator();
-                ui.label(RichText::new("Período:").strong());
+                ui.label(RichText::new("Period:").strong());
                 let periodos = [
-                    ("5d", "5 DIAS"),
-                    ("1mo", "30 DIAS"),
-                    ("6mo", "6 MESES"),
-                    ("1y", "1 ANO"),
-                    ("5y", "5 ANOS"),
+                    ("5d", "5 DAYS"),
+                    ("1mo", "30 DAYS"),
+                    ("6mo", "6 MONTHS"),
+                    ("1y", "1 YEAR"),
+                    ("5y", "5 YEARS"),
                 ];
                 for (cod, rotulo) in periodos {
                     let sel = self.settings.selected_period == cod;
@@ -755,9 +754,9 @@ impl DaxEconomiaApp {
                 }
 
                 ui.separator();
-                ui.label(RichText::new("Moeda:").strong());
+                ui.label(RichText::new("Currency:").strong());
                 let moedas = [
-                    ("ORIGINAL", "Moeda Nativa"),
+                    ("ORIGINAL", "Native Currency"),
                     ("BRL", "R$ (BRL)"),
                     ("USD", "US$ (USD)"),
                     ("EUR", "€ (EUR)"),
@@ -783,7 +782,7 @@ impl DaxEconomiaApp {
 
         let Some(dados) = &self.stock_data else {
             ui.label(
-                RichText::new("Carregando série histórica OHLCV e múltiplos fundamentalistas...")
+                RichText::new("Loading OHLCV historical series and fundamental multiples...")
                     .size(15.0)
                     .color(TEXT_MUTED),
             );
@@ -803,7 +802,7 @@ impl DaxEconomiaApp {
             badge_variacao(ui, m.change_day_pct);
             ui.label(
                 RichText::new(format!(
-                    " | Setor: {} | País: {} | Moeda: {} (Câmbio: {:.4})",
+                    " | Sector: {} | Country: {} | Currency: {} (FX: {:.4})",
                     dados.sector, dados.country, dados.display_currency, dados.fx_factor
                 ))
                 .size(12.0)
@@ -812,7 +811,7 @@ impl DaxEconomiaApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .button("📊 Relatório Interativo (Plotly HTML)")
+                    .button("📊 Interactive Report (Plotly HTML)")
                     .clicked()
                 {
                     self.bridge.request_export_chart(
@@ -823,7 +822,7 @@ impl DaxEconomiaApp {
                         ctx.clone(),
                     );
                 }
-                if ui.button("🖼 Exportar PNG (Matplotlib)").clicked() {
+                if ui.button("🖼 Export PNG (Matplotlib)").clicked() {
                     self.bridge.request_export_chart(
                         &dados.ticker,
                         &dados.period,
@@ -841,7 +840,7 @@ impl DaxEconomiaApp {
         ui.columns(5, |cols| {
             hero_blue_frame().show(&mut cols[0], |ui| {
                 ui.set_min_height(74.0);
-                ui.label(RichText::new("VALOR ATUAL").size(11.0).color(TEXT_LIGHT));
+                ui.label(RichText::new("CURRENT PRICE").size(11.0).color(TEXT_LIGHT));
                 ui.label(
                     RichText::new(formatar_moeda(m.current_price, moeda))
                         .size(20.0)
@@ -851,7 +850,7 @@ impl DaxEconomiaApp {
                 let seta = if m.change_day_pct >= 0.0 { "⬆" } else { "⬇" };
                 ui.label(
                     RichText::new(
-                        format!("{seta} {:.2}% (hoje)", m.change_day_pct).replace('.', ","),
+                        format!("{seta} {:.2}% (today)", m.change_day_pct),
                     )
                     .size(11.5)
                     .strong()
@@ -861,7 +860,7 @@ impl DaxEconomiaApp {
 
             card_frame().show(&mut cols[1], |ui| {
                 ui.set_min_height(74.0);
-                ui.label(RichText::new("MIN. 52 SEMANAS").size(11.0).color(TEXT_MUTED));
+                ui.label(RichText::new("52-WEEK LOW").size(11.0).color(TEXT_MUTED));
                 ui.label(
                     RichText::new(formatar_moeda(m.min_52w, moeda))
                         .size(18.0)
@@ -869,7 +868,7 @@ impl DaxEconomiaApp {
                         .color(TEXT_LIGHT),
                 );
                 ui.label(
-                    RichText::new(format!("MIN. MÊS: {}", formatar_moeda(m.min_month, moeda)))
+                    RichText::new(format!("MONTH LOW: {}", formatar_moeda(m.min_month, moeda)))
                         .size(11.0)
                         .color(TEXT_MUTED),
                 );
@@ -877,7 +876,7 @@ impl DaxEconomiaApp {
 
             card_frame().show(&mut cols[2], |ui| {
                 ui.set_min_height(74.0);
-                ui.label(RichText::new("MÁX. 52 SEMANAS").size(11.0).color(TEXT_MUTED));
+                ui.label(RichText::new("52-WEEK HIGH").size(11.0).color(TEXT_MUTED));
                 ui.label(
                     RichText::new(formatar_moeda(m.max_52w, moeda))
                         .size(18.0)
@@ -885,7 +884,7 @@ impl DaxEconomiaApp {
                         .color(TEXT_LIGHT),
                 );
                 ui.label(
-                    RichText::new(format!("MÁX. MÊS: {}", formatar_moeda(m.max_month, moeda)))
+                    RichText::new(format!("MONTH HIGH: {}", formatar_moeda(m.max_month, moeda)))
                         .size(11.0)
                         .color(TEXT_MUTED),
                 );
@@ -895,14 +894,14 @@ impl DaxEconomiaApp {
                 ui.set_min_height(74.0);
                 ui.label(RichText::new("DIVIDEND YIELD").size(11.0).color(TEXT_MUTED));
                 ui.label(
-                    RichText::new(format!("{:.2}%", m.dividend_yield_pct).replace('.', ","))
+                    RichText::new(format!("{:.2}%", m.dividend_yield_pct))
                         .size(18.0)
                         .strong()
                         .color(ACCENT_CYAN),
                 );
                 ui.label(
                     RichText::new(format!(
-                        "ÚLT. 12M: {}",
+                        "LAST 12M: {}",
                         formatar_moeda(m.dividends_12m, moeda)
                     ))
                     .size(11.0)
@@ -912,11 +911,11 @@ impl DaxEconomiaApp {
 
             card_frame().show(&mut cols[4], |ui| {
                 ui.set_min_height(74.0);
-                ui.label(RichText::new("VALORIZAÇÃO (12M)").size(11.0).color(TEXT_MUTED));
+                ui.label(RichText::new("RETURN (12M)").size(11.0).color(TEXT_MUTED));
                 let seta12 = if m.change_12m_pct >= 0.0 { "⬆" } else { "⬇" };
                 ui.label(
                     RichText::new(
-                        format!("{seta12} {:.2}%", m.change_12m_pct).replace('.', ","),
+                        format!("{seta12} {:.2}%", m.change_12m_pct),
                     )
                     .size(18.0)
                     .strong()
@@ -924,7 +923,7 @@ impl DaxEconomiaApp {
                 );
                 ui.label(
                     RichText::new(
-                        format!("MÊS ATUAL: {:.2}%", m.change_month_pct).replace('.', ","),
+                        format!("CURRENT MONTH: {:.2}%", m.change_month_pct),
                     )
                     .size(11.0)
                     .color(cor_variacao(m.change_month_pct)),
@@ -939,7 +938,7 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(format!(
-                        "COTAÇÃO DE {} ({})",
+                        "{} QUOTE ({})",
                         dados.short_code, dados.display_currency
                     ))
                     .size(14.0)
@@ -955,7 +954,7 @@ impl DaxEconomiaApp {
                 ui.selectable_value(
                     &mut self.stock_chart_mode,
                     StockChartMode::AreaLine,
-                    "📈 Linha Contínua (Dax3)",
+                    "📈 Continuous Line (Dax3)",
                 );
                 ui.separator();
                 ui.checkbox(&mut self.show_sma20, "SMA 20");
@@ -970,7 +969,7 @@ impl DaxEconomiaApp {
                 .width((largura_max - 36.0).max(400.0))
                 .height(265.0)
                 .allow_scroll(false)
-                .x_axis_label("Data / Ano")
+                .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
                     if idx >= 0 && (idx as usize) < datas_plot.len() {
@@ -1011,7 +1010,7 @@ impl DaxEconomiaApp {
                             let piso = m.min_52w * 0.96;
                             plot_ui.line(
                                 Line::new(pts_close)
-                                    .name("Fechamento")
+                                    .name("Close")
                                     .color(ACCENT_ORANGE)
                                     .width(2.4_f32)
                                     .fill(piso as f32),
@@ -1052,23 +1051,23 @@ impl DaxEconomiaApp {
             let mut legenda_acoes: Vec<(Color32, String)> = Vec::new();
             match self.stock_chart_mode {
                 StockChartMode::Candlestick => {
-                    legenda_acoes.push((GREEN_UP, "Candle de Alta (Fechamento ≥ Abertura)".to_string()));
-                    legenda_acoes.push((RED_DOWN, "Candle de Baixa (Fechamento < Abertura)".to_string()));
+                    legenda_acoes.push((GREEN_UP, "Bullish Candle (Close ≥ Open)".to_string()));
+                    legenda_acoes.push((RED_DOWN, "Bearish Candle (Close < Open)".to_string()));
                 }
                 StockChartMode::AreaLine => {
                     legenda_acoes.push((
                         ACCENT_ORANGE,
-                        format!("Preço de Fechamento ({})", dados.short_code),
+                        format!("Closing Price ({})", dados.short_code),
                     ));
                 }
             }
             if self.show_sma20 {
-                legenda_acoes.push((ACCENT_CYAN, "SMA 20 (Média Móvel 20 períodos)".to_string()));
+                legenda_acoes.push((ACCENT_CYAN, "SMA 20 (20-period Moving Average)".to_string()));
             }
             if self.show_sma50 {
                 legenda_acoes.push((
                     Color32::from_rgb(250, 204, 21),
-                    "SMA 50 (Média Móvel 50 períodos)".to_string(),
+                    "SMA 50 (50-period Moving Average)".to_string(),
                 ));
             }
             renderizar_legenda_abaixo(ui, &legenda_acoes);
@@ -1079,7 +1078,7 @@ impl DaxEconomiaApp {
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.label(
-                RichText::new("📋 Série Histórica OHLCV (Pregões mais recentes no topo)")
+                RichText::new("📋 OHLCV Historical Series (Most recent trading days on top)")
                     .size(13.5)
                     .strong()
                     .color(TEXT_LIGHT),
@@ -1104,13 +1103,13 @@ impl DaxEconomiaApp {
                         .max_scroll_height(185.0)
                         .header(22.0, |mut header| {
                             for col in [
-                                "Data",
-                                "Abertura",
-                                "Máxima",
-                                "Mínima",
-                                "Fechamento",
+                                "Date",
+                                "Open",
+                                "High",
+                                "Low",
+                                "Close",
                                 "SMA 20",
-                                "Volume Negociado",
+                                "Trading Volume",
                             ] {
                                 header.col(|ui| {
                                     ui.label(RichText::new(col).strong().color(ACCENT_CYAN));
@@ -1126,25 +1125,25 @@ impl DaxEconomiaApp {
                                     ui.label(&c.date);
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", c.open).replace('.', ","));
+                                    ui.label(format!("{:.2}", c.open));
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", c.high).replace('.', ","));
+                                    ui.label(format!("{:.2}", c.high));
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", c.low).replace('.', ","));
+                                    ui.label(format!("{:.2}", c.low));
                                 });
                                 row.col(|ui| {
                                     ui.label(
                                         RichText::new(
-                                            format!("{:.2}", c.close).replace('.', ","),
+                                            format!("{:.2}", c.close),
                                         )
                                         .strong()
                                         .color(cor_candle),
                                     );
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", c.sma20).replace('.', ","));
+                                    ui.label(format!("{:.2}", c.sma20));
                                 });
                                 row.col(|ui| {
                                     ui.label(format!("{}", c.volume));
@@ -1162,16 +1161,16 @@ impl DaxEconomiaApp {
         ui.set_max_width(largura_max);
 
         let Some(fx) = self.forex_data.clone() else {
-            ui.label(RichText::new("Carregando cotações de moedas e índice DXY...").size(15.0));
+            ui.label(RichText::new("Loading currency quotes and DXY index...").size(15.0));
             return;
         };
 
-        // 1. PAINEL DE CONVERSOR CAMBIAL + GERENCIADOR DE ATÉ 10 MOEDAS (INSERIR / RETIRAR)
+        // 1. CURRENCY CONVERTER PANEL + MANAGER FOR UP TO 10 CURRENCIES (ADD / REMOVE)
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new("💱 Conversor Cambial:")
+                    RichText::new("💱 Currency Converter:")
                         .size(13.0)
                         .strong()
                         .color(ACCENT_CYAN),
@@ -1223,8 +1222,8 @@ impl DaxEconomiaApp {
                 );
 
                 ui.separator();
-                ui.label(RichText::new("Período:").strong());
-                for (cod, rot) in [("1mo", "1M"), ("6mo", "6M"), ("1y", "1A"), ("5y", "5A")] {
+                ui.label(RichText::new("Period:").strong());
+                for (cod, rot) in [("1mo", "1M"), ("6mo", "6M"), ("1y", "1Y"), ("5y", "5Y")] {
                     if ui
                         .selectable_label(self.settings.selected_period == cod, rot)
                         .clicked()
@@ -1244,7 +1243,7 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(format!(
-                        "🌐 Moedas Selecionadas ({qtd_moedas} / 10 máx) — Sincroniza países com (c) Juros e (d) Socioeconomia:"
+                        "🌐 Selected Currencies ({qtd_moedas} / 10 max) — Syncs countries with (c) Rates & (d) Macro:"
                     ))
                     .size(12.5)
                     .strong()
@@ -1276,9 +1275,9 @@ impl DaxEconomiaApp {
                 if ui
                     .add_enabled(
                         pode_inserir,
-                        egui::Button::new(RichText::new("➕ Inserir Moeda").strong()),
+                        egui::Button::new(RichText::new("➕ Add Currency").strong()),
                     )
-                    .on_hover_text("Adiciona a moeda escolhida (limite máximo de 10 moedas)")
+                    .on_hover_text("Add the selected currency (maximum limit of 10 currencies)")
                     .clicked()
                 {
                     self.settings
@@ -1289,7 +1288,7 @@ impl DaxEconomiaApp {
 
                 if qtd_moedas >= 10 {
                     ui.label(
-                        RichText::new("(Limite de 10 moedas atingido)")
+                        RichText::new("(10 currency limit reached)")
                             .size(11.0)
                             .color(ACCENT_ORANGE),
                     );
@@ -1323,7 +1322,7 @@ impl DaxEconomiaApp {
                             )
                             .fill(BG_CARD_ALT),
                         )
-                        .on_hover_text("Clique para retirar esta moeda da lista")
+                        .on_hover_text("Click to remove this currency from the list")
                         .clicked()
                         && pode_remover
                     {
@@ -1348,7 +1347,7 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(
-                        "📌 Destaques de Variação vs Dólar Americano (USD) — Escolha até 3 Moedas:",
+                        "📌 Spotlights vs US Dollar (USD) — Choose up to 3 Currencies:",
                     )
                     .size(13.0)
                     .strong()
@@ -1365,9 +1364,9 @@ impl DaxEconomiaApp {
 
                 let mut mudou_destaque = false;
                 for slot in 0..3 {
-                    ui.label(RichText::new(format!("Moeda {}:", slot + 1)).size(11.5));
+                    ui.label(RichText::new(format!("Currency {}:", slot + 1)).size(11.5));
                     let atual_txt = if self.settings.forex_spotlight_three[slot].is_empty() {
-                        "(Nenhuma)".to_string()
+                        "(None)".to_string()
                     } else {
                         self.settings.forex_spotlight_three[slot].clone()
                     };
@@ -1379,7 +1378,7 @@ impl DaxEconomiaApp {
                                 .selectable_value(
                                     &mut self.settings.forex_spotlight_three[slot],
                                     String::new(),
-                                    "(Nenhuma)",
+                                    "(None)",
                                 )
                                 .changed()
                             {
@@ -1459,7 +1458,7 @@ impl DaxEconomiaApp {
                             ui.horizontal(|ui| {
                                 ui.label(
                                     RichText::new(
-                                        format!("{:.4}", par.current_rate).replace('.', ","),
+                                        format!("{:.4}", par.current_rate),
                                     )
                                     .size(16.5)
                                     .strong()
@@ -1487,7 +1486,7 @@ impl DaxEconomiaApp {
                             });
                             ui.label(
                                 RichText::new(format!(
-                                    "Variação no período vs USD: {:+.2}%",
+                                    "Period change vs USD: {:+.2}%",
                                     par.change_period_pct
                                 ))
                                 .size(10.5)
@@ -1505,9 +1504,9 @@ impl DaxEconomiaApp {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal_wrapped(|ui| {
                 let titulo_grafico = if self.forex_base100_mode {
-                    "📈 Evolução Comparativa Cambial & DXY (Base 100 = Início do Período)"
+                    "📈 Comparative FX & DXY Evolution (Base 100 = Start of Period)"
                 } else {
-                    "📈 Evolução Comparativa Cambial & DXY (Cotação Nominal)"
+                    "📈 Comparative FX & DXY Evolution (Nominal Quote)"
                 };
                 ui.label(
                     RichText::new(titulo_grafico)
@@ -1516,23 +1515,23 @@ impl DaxEconomiaApp {
                         .color(TEXT_LIGHT),
                 );
                 ui.separator();
-                ui.checkbox(&mut self.forex_base100_mode, "Escala Base 100");
+                ui.checkbox(&mut self.forex_base100_mode, "Base 100 Scale");
             });
 
-            // Checkboxes para ativar ou desativar cada moeda que está sendo comparada no gráfico
+            // Checkboxes to enable or disable each currency on the chart
             ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new("Ativar/Desativar no gráfico:")
+                    RichText::new("Show/Hide on chart:")
                         .size(11.5)
                         .strong()
                         .color(ACCENT_CYAN),
                 );
 
-                if ui.small_button("Marcar Todas").clicked() {
+                if ui.small_button("Select All").clicked() {
                     self.settings.disabled_forex_chart_pairs.clear();
                     let _ = self.settings.salvar();
                 }
-                if ui.small_button("Desmarcar Todas").clicked() {
+                if ui.small_button("Deselect All").clicked() {
                     self.settings.disabled_forex_chart_pairs =
                         fx.pairs.iter().map(|p| p.ticker.clone()).collect();
                     let _ = self.settings.salvar();
@@ -1607,7 +1606,7 @@ impl DaxEconomiaApp {
                 .width((largura_max - 36.0).max(400.0))
                 .height(250.0)
                 .allow_scroll(false)
-                .x_axis_label("Data / Ano")
+                .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
                     if idx >= 0 && (idx as usize) < datas_eixo_x.len() {
@@ -1664,7 +1663,7 @@ impl DaxEconomiaApp {
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.label(
-                RichText::new("📋 Tabela Comparativa de Moedas e Índice Dólar (DXY)")
+                RichText::new("📋 Comparative Table: Currencies & US Dollar Index (DXY)")
                     .size(13.5)
                     .strong(),
             );
@@ -1688,13 +1687,13 @@ impl DaxEconomiaApp {
                         .header(22.0, |mut header| {
                             for h in [
                                 "Ticker",
-                                "Descrição do Par",
-                                "Região / País",
-                                "Cotação Atual",
-                                "Var. Dia (%)",
-                                "Var. Período",
-                                "Mín / Máx",
-                                "Volatilidade (a.a.)",
+                                "Pair Description",
+                                "Region / Country",
+                                "Current Rate",
+                                "Day Chg (%)",
+                                "Period Chg",
+                                "Low / High",
+                                "Volatility (p.a.)",
                             ] {
                                 header.col(|ui| {
                                     ui.label(RichText::new(h).strong().color(ACCENT_CYAN));
@@ -1716,7 +1715,7 @@ impl DaxEconomiaApp {
                                 row.col(|ui| {
                                     ui.label(
                                         RichText::new(
-                                            format!("{:.4}", p.current_rate).replace('.', ","),
+                                            format!("{:.4}", p.current_rate),
                                         )
                                         .strong(),
                                     );
@@ -1759,7 +1758,7 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(
-                        "🏦 Taxas Básicas de Juros (BCs) — Países sincronizados com as moedas selecionadas no item (b) Moedas & Dólar (DXY):",
+                        "🏦 Central Bank Policy Rates — Countries synced with currencies selected in (b) Currencies & DXY:",
                     )
                     .size(13.0)
                     .strong()
@@ -1772,7 +1771,7 @@ impl DaxEconomiaApp {
 
         let Some(juros) = &self.interest_data else {
             ui.label(
-                RichText::new("Carregando taxas de juros dos Bancos Centrais...").size(15.0),
+                RichText::new("Loading Central Bank interest rates...").size(15.0),
             );
             return;
         };
@@ -1804,7 +1803,7 @@ impl DaxEconomiaApp {
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     ui.label(
-                                        RichText::new(format!("Série: {}", item.series_code))
+                                        RichText::new(format!("Series: {}", item.series_code))
                                             .size(10.5)
                                             .color(ACCENT_CYAN),
                                     );
@@ -1819,14 +1818,13 @@ impl DaxEconomiaApp {
                         ui.add_space(3.0);
                         ui.horizontal(|ui| {
                             ui.label(
-                                RichText::new("Taxa Atual:")
+                                RichText::new("Current Rate:")
                                     .size(11.5)
                                     .color(TEXT_LIGHT),
                             );
                             ui.label(
                                 RichText::new(
-                                    format!("{:.2}% a.a.", item.current_rate_pct)
-                                        .replace('.', ","),
+                                    format!("{:.2}% p.a.", item.current_rate_pct),
                                 )
                                 .size(18.5)
                                 .strong()
@@ -1840,7 +1838,7 @@ impl DaxEconomiaApp {
                         });
                         ui.label(
                             RichText::new(format!(
-                                "Inflação CPI: {:.2}%  |  Juro Real: {:+.2}%",
+                                "CPI Inflation: {:.2}%  |  Real Rate: {:+.2}%",
                                 item.inflation_cpi_pct, item.real_interest_pct
                             ))
                             .size(11.0)
@@ -1862,7 +1860,7 @@ impl DaxEconomiaApp {
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.label(
-                RichText::new("📈 Trajetória Histórica das Taxas Básicas de Juros (% ao ano)")
+                RichText::new("📈 Historical Policy Interest Rate Trajectory (% p.a.)")
                     .size(13.5)
                     .strong(),
             );
@@ -1908,7 +1906,7 @@ impl DaxEconomiaApp {
                 .width((largura_max - 36.0).max(400.0))
                 .height(250.0)
                 .allow_scroll(false)
-                .x_axis_label("Data / Ano")
+                .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
                     if idx >= 0 && (idx as usize) < datas_juros.len() {
@@ -1953,7 +1951,7 @@ impl DaxEconomiaApp {
         card_frame().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.label(
-                RichText::new("📋 Quadro Comparativo de Política Monetária e Juro Real")
+                RichText::new("📋 Monetary Policy & Real Interest Rate Comparison")
                     .size(13.5)
                     .strong(),
             );
@@ -1975,13 +1973,13 @@ impl DaxEconomiaApp {
                         .max_scroll_height(190.0)
                         .header(22.0, |mut header| {
                             for h in [
-                                "País / Bloco",
-                                "Banco Central",
-                                "Série / Código",
-                                "Taxa Atual",
-                                "Taxa Anterior",
-                                "Inflação (CPI)",
-                                "Juro Real Ex-Post",
+                                "Country / Bloc",
+                                "Central Bank",
+                                "Series / Code",
+                                "Current Rate",
+                                "Previous Rate",
+                                "Inflation (CPI)",
+                                "Ex-Post Real Rate",
                             ] {
                                 header.col(|ui| {
                                     ui.label(RichText::new(h).strong().color(ACCENT_CYAN));
@@ -2035,7 +2033,7 @@ impl DaxEconomiaApp {
         let Some(macro_resp) = &self.macro_data else {
             ui.label(
                 RichText::new(
-                    "Carregando indicadores socioeconômicos do Banco Mundial (World Bank)...",
+                    "Loading World Bank socioeconomic indicators...",
                 )
                 .size(15.0),
             );
@@ -2046,7 +2044,7 @@ impl DaxEconomiaApp {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new("🌍 Indicador Socioeconômico:")
+                    RichText::new("🌍 Socioeconomic Indicator:")
                         .size(13.0)
                         .strong()
                         .color(ACCENT_CYAN),
@@ -2065,7 +2063,7 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(
-                        "🔗 Países sincronizados com o item (b) Moedas & Dólar (DXY)  |  Intervalo de Anos:",
+                        "🔗 Countries synced with (b) Currencies & DXY  |  Year Range:",
                     )
                     .size(12.0)
                     .strong()
@@ -2073,7 +2071,7 @@ impl DaxEconomiaApp {
                 );
 
                 let mut mudou_ano = false;
-                ui.label("Início:");
+                ui.label("Start:");
                 if ui
                     .add(
                         egui::DragValue::new(&mut self.settings.macro_start_year)
@@ -2083,7 +2081,7 @@ impl DaxEconomiaApp {
                 {
                     mudou_ano = true;
                 }
-                ui.label("Final:");
+                ui.label("End:");
                 if ui
                     .add(
                         egui::DragValue::new(&mut self.settings.macro_end_year)
@@ -2094,7 +2092,7 @@ impl DaxEconomiaApp {
                     mudou_ano = true;
                 }
 
-                if mudou_ano && ui.button("Aplicar Período").clicked() {
+                if mudou_ano && ui.button("Apply Period").clicked() {
                     let _ = self.settings.salvar();
                     let list = self.settings.selected_macro_countries.clone();
                     self.bridge.request_macro(
@@ -2161,7 +2159,7 @@ impl DaxEconomiaApp {
             card_frame().show(&mut cols[0], |ui| {
                 ui.label(
                     RichText::new(format!(
-                        "📈 Série Histórica ({ano_min} a {ano_max}) — {nome_ind}"
+                        "📈 Historical Series ({ano_min} to {ano_max}) — {nome_ind}"
                     ))
                     .size(13.0)
                     .strong(),
@@ -2172,14 +2170,14 @@ impl DaxEconomiaApp {
                     .height(245.0)
                     .allow_scroll(false)
                     .x_grid_spacer(uniform_grid_spacer(|_| [1.0, 2.0, 5.0]))
-                    .x_axis_label(format!("Ano (Início: {ano_min} — Final: {ano_max})"))
+                    .x_axis_label(format!("Year (Start: {ano_min} — End: {ano_max})"))
                     .x_axis_formatter(move |mark, _range| {
                         let ano = mark.value.round() as i32;
                         if (mark.value - ano as f64).abs() < 0.05 {
                             if ano == ano_min {
-                                format!("{ano} (Início)")
+                                format!("{ano} (Start)")
                             } else if ano == ano_max {
-                                format!("{ano} (Final)")
+                                format!("{ano} (End)")
                             } else {
                                 format!("{ano}")
                             }
@@ -2209,7 +2207,7 @@ impl DaxEconomiaApp {
             card_frame().show(&mut cols[1], |ui| {
                 ui.label(
                     RichText::new(format!(
-                        "📊 Comparativo Recente ({ano_max}) — {nome_ind}"
+                        "📊 Latest Comparison ({ano_max}) — {nome_ind}"
                     ))
                     .size(13.0)
                     .strong(),
@@ -2226,7 +2224,7 @@ impl DaxEconomiaApp {
                     .height(245.0)
                     .allow_scroll(false)
                     .x_grid_spacer(uniform_grid_spacer(|_| [1.0, 1.0, 1.0]))
-                    .x_axis_label(format!("Países Comparados (Dados: {ano_min}–{ano_max})"))
+                    .x_axis_label(format!("Compared Countries (Data: {ano_min}–{ano_max})"))
                     .x_axis_formatter(move |mark, _range| {
                         let i = mark.value.round() as isize;
                         if (mark.value - i as f64).abs() < 0.05
@@ -2268,7 +2266,7 @@ impl DaxEconomiaApp {
             ui.set_max_width(largura_max - 20.0);
             ui.label(
                 RichText::new(format!(
-                    "📋 Painel Comparativo Multidimensional (Banco Mundial — Período {ano_min} a {ano_max})"
+                    "📋 Multidimensional Comparative Panel (World Bank — Period {ano_min} to {ano_max})"
                 ))
                 .size(13.5)
                 .strong(),
@@ -2291,13 +2289,13 @@ impl DaxEconomiaApp {
                         .max_scroll_height(195.0)
                         .header(24.0, |mut header| {
                             for h in [
-                                "País (ISO-3)",
-                                "PIB Total (US$ Bi)",
-                                "PIB per Capita (US$)",
-                                "Inflação CPI (%)",
-                                "Desemprego (%)",
-                                "Câmbio Oficial (/US$)",
-                                "População (Milhões)",
+                                "Country (ISO-3)",
+                                "Total GDP (US$ B)",
+                                "GDP per Capita (US$)",
+                                "CPI Inflation (%)",
+                                "Unemployment (%)",
+                                "Official FX (/US$)",
+                                "Population (Millions)",
                             ] {
                                 header.col(|ui| {
                                     ui.label(RichText::new(h).strong().color(ACCENT_CYAN));
@@ -2321,25 +2319,25 @@ impl DaxEconomiaApp {
                                     );
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("US$ {:.1} Bi", gdp).replace('.', ","));
+                                    ui.label(format!("US$ {:.1} B", gdp));
                                 });
                                 row.col(|ui| {
                                     ui.label(format!("US$ {:.0}", gdppc));
                                 });
                                 row.col(|ui| {
                                     ui.label(
-                                        RichText::new(format!("{:.2}%", cpi).replace('.', ","))
+                                        RichText::new(format!("{:.2}%", cpi))
                                             .color(if cpi > 5.0 { RED_DOWN } else { GREEN_UP }),
                                     );
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}%", unemp).replace('.', ","));
+                                    ui.label(format!("{:.2}%", unemp));
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", fx).replace('.', ","));
+                                    ui.label(format!("{:.2}", fx));
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.1} M", pop).replace('.', ","));
+                                    ui.label(format!("{:.1} M", pop));
                                 });
                             });
                         });
@@ -2355,7 +2353,7 @@ impl DaxEconomiaApp {
 
         let Some(ov) = self.overview_data.clone() else {
             ui.label(
-                RichText::new("Carregando Dashboard de Mercado, Altas/Baixas e Scanner...")
+                RichText::new("Loading Market Dashboard, Gainers/Losers, and Scanner...")
                     .size(15.0),
             );
             return;
@@ -2363,12 +2361,12 @@ impl DaxEconomiaApp {
 
         let mut acao_para_abrir: Option<String> = None;
 
-        // 1. PAINEL DE ALTAS E BAIXAS (DAX1.PNG) — DUAS COLUNAS SEPARADAS COM GRADE DE 4 COLUNAS (SEM SOBREPOSIÇÃO)
+        // 1. GAINERS & LOSERS PANEL (DAX1.PNG)
         ui.columns(2, |cols| {
             card_frame().show(&mut cols[0], |ui| {
                 ui.set_min_height(112.0);
                 ui.label(
-                    RichText::new("⬆ Altas do Pregão")
+                    RichText::new("⬆ Top Gainers")
                         .size(15.0)
                         .strong()
                         .color(GREEN_UP),
@@ -2391,8 +2389,7 @@ impl DaxEconomiaApp {
                                         [76.0, 24.0],
                                         egui::Button::new(
                                             RichText::new(
-                                                format!("+{:.2}%", item.change_pct.abs())
-                                                    .replace('.', ","),
+                                                format!("+{:.2}%", item.change_pct.abs()),
                                             )
                                             .size(12.0)
                                             .strong()
@@ -2402,7 +2399,7 @@ impl DaxEconomiaApp {
                                         .wrap_mode(egui::TextWrapMode::Extend),
                                     );
                                     if btn
-                                        .on_hover_text("Clique para abrir os detalhes do ativo")
+                                        .on_hover_text("Click to open asset details")
                                         .clicked()
                                     {
                                         acao_para_abrir = Some(item.code.clone());
@@ -2417,7 +2414,7 @@ impl DaxEconomiaApp {
             card_frame().show(&mut cols[1], |ui| {
                 ui.set_min_height(112.0);
                 ui.label(
-                    RichText::new("⬇ Baixas do Pregão")
+                    RichText::new("⬇ Top Losers")
                         .size(15.0)
                         .strong()
                         .color(RED_DOWN),
@@ -2440,8 +2437,7 @@ impl DaxEconomiaApp {
                                         [76.0, 24.0],
                                         egui::Button::new(
                                             RichText::new(
-                                                format!("-{:.2}%", item.change_pct.abs())
-                                                    .replace('.', ","),
+                                                format!("-{:.2}%", item.change_pct.abs()),
                                             )
                                             .size(12.0)
                                             .strong()
@@ -2451,7 +2447,7 @@ impl DaxEconomiaApp {
                                         .wrap_mode(egui::TextWrapMode::Extend),
                                     );
                                     if btn
-                                        .on_hover_text("Clique para abrir os detalhes do ativo")
+                                        .on_hover_text("Click to open asset details")
                                         .clicked()
                                     {
                                         acao_para_abrir = Some(item.code.clone());
@@ -2468,7 +2464,7 @@ impl DaxEconomiaApp {
 
         ui.horizontal_wrapped(|ui| {
             ui.label(
-                RichText::new("Modo de Visualização:")
+                RichText::new("View Mode:")
                     .size(13.5)
                     .strong()
                     .color(ACCENT_CYAN),
@@ -2476,12 +2472,12 @@ impl DaxEconomiaApp {
             ui.selectable_value(
                 &mut self.dashboard_mode,
                 DashboardViewMode::CardsDax2,
-                "📊 Cards com Sparklines (Estilo Dax2 / TradeMap)",
+                "📊 Cards with Sparklines (Dax2 / TradeMap Style)",
             );
             ui.selectable_value(
                 &mut self.dashboard_mode,
                 DashboardViewMode::ScannerDax4,
-                "🔍 Stocks Scanner & Filtros (Estilo Dax4 / xStation)",
+                "🔍 Stocks Scanner & Filters (Dax4 / xStation Style)",
             );
         });
 
@@ -2557,7 +2553,7 @@ impl DaxEconomiaApp {
                                         .color(cor_variacao(ativo.change_12m_pct)),
                                     );
 
-                                    if ui.small_button("🔍 Detalhes").clicked() {
+                                    if ui.small_button("🔍 Details").clicked() {
                                         acao_para_abrir = Some(ativo.short_code.clone());
                                     }
                                 });
@@ -2572,16 +2568,16 @@ impl DaxEconomiaApp {
                 card_frame().show(ui, |ui| {
                     ui.set_max_width(largura_max - 20.0);
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new("País:").strong());
+                        ui.label(RichText::new("Country:").strong());
                         egui::ComboBox::from_id_salt("scanner_country_cb")
                             .selected_text(&self.scanner_country)
                             .show_ui(ui, |ui| {
                                 for p in [
-                                    "Todos os países",
-                                    "Brasil",
-                                    "Estados Unidos",
-                                    "Alemanha",
-                                    "Países Baixos",
+                                    "All countries",
+                                    "Brazil",
+                                    "United States",
+                                    "Germany",
+                                    "Netherlands",
                                 ] {
                                     ui.selectable_value(
                                         &mut self.scanner_country,
@@ -2592,15 +2588,15 @@ impl DaxEconomiaApp {
                             });
 
                         ui.separator();
-                        ui.label(RichText::new("Procurar instrumento:").strong());
+                        ui.label(RichText::new("Search instrument:").strong());
                         ui.add(
                             egui::TextEdit::singleline(&mut self.scanner_search)
                                 .desired_width(150.0)
-                                .hint_text("Nome ou ticker..."),
+                                .hint_text("Name or ticker..."),
                         );
 
-                        if ui.button("Limpar Filtros").clicked() {
-                            self.scanner_country = "Todos os países".to_string();
+                        if ui.button("Clear Filters").clicked() {
+                            self.scanner_country = "All countries".to_string();
                             self.scanner_search.clear();
                             self.filter_min_mcap = 0.0;
                             self.filter_max_pe = 100.0;
@@ -2613,18 +2609,18 @@ impl DaxEconomiaApp {
                     ui.columns(4, |cols| {
                         cols[0].vertical(|ui| {
                             ui.label(
-                                RichText::new("Capitalização Mínima (Bi)")
+                                RichText::new("Min Market Cap (B)")
                                     .size(11.0)
                                     .color(TEXT_MUTED),
                             );
                             ui.add(
                                 egui::Slider::new(&mut self.filter_min_mcap, 0.0..=1000.0)
-                                    .suffix(" Bi"),
+                                    .suffix(" B"),
                             );
                         });
                         cols[1].vertical(|ui| {
                             ui.label(
-                                RichText::new("P/E (Preço/Lucro Máx)")
+                                RichText::new("Max P/E Ratio")
                                     .size(11.0)
                                     .color(TEXT_MUTED),
                             );
@@ -2632,7 +2628,7 @@ impl DaxEconomiaApp {
                         });
                         cols[2].vertical(|ui| {
                             ui.label(
-                                RichText::new("Dividend Yield Mín (%)")
+                                RichText::new("Min Dividend Yield (%)")
                                     .size(11.0)
                                     .color(TEXT_MUTED),
                             );
@@ -2642,7 +2638,7 @@ impl DaxEconomiaApp {
                         });
                         cols[3].vertical(|ui| {
                             ui.label(
-                                RichText::new("ROE Mínimo (%)")
+                                RichText::new("Min ROE (%)")
                                     .size(11.0)
                                     .color(TEXT_MUTED),
                             );
@@ -2661,7 +2657,7 @@ impl DaxEconomiaApp {
                     .assets
                     .iter()
                     .filter(|a| {
-                        let ok_pais = self.scanner_country == "Todos os países"
+                        let ok_pais = self.scanner_country == "All countries"
                             || a.country.eq_ignore_ascii_case(&self.scanner_country);
                         let ok_busca = termo.is_empty()
                             || a.name.to_lowercase().contains(&termo)
@@ -2696,16 +2692,16 @@ impl DaxEconomiaApp {
                                 .max_scroll_height(330.0)
                                 .header(24.0, |mut header| {
                                     for h in [
-                                        "NOME COMPLETO",
-                                        "INDÚSTRIA / SETOR",
-                                        "PAÍS",
-                                        "CAPITALIZAÇÃO",
-                                        "EPS (LPA)",
-                                        "P/E (P/L)",
+                                        "FULL NAME",
+                                        "INDUSTRY / SECTOR",
+                                        "COUNTRY",
+                                        "MARKET CAP",
+                                        "EPS",
+                                        "P/E",
                                         "DIVIDEND YIELD",
-                                        "P/B (P/VP)",
+                                        "P/B",
                                         "ROE (%)",
-                                        "AÇÃO",
+                                        "ACTION",
                                     ] {
                                         header.col(|ui| {
                                             ui.label(
@@ -2767,7 +2763,7 @@ impl DaxEconomiaApp {
                                             );
                                         });
                                         row.col(|ui| {
-                                            if ui.small_button("📈 Analisar").clicked() {
+                                            if ui.small_button("📈 Analyze").clicked() {
                                                 acao_para_abrir = Some(a.short_code.clone());
                                             }
                                         });

@@ -6,18 +6,18 @@ use std::path::PathBuf;
 
 /// Catálogo estático que vincula cada Par Cambial da Aba (b) ao País de Juros (Aba c) e ao País World Bank (Aba d).
 pub const CATALOGO_MOEDAS_PAISES: &[(&str, &str, &str, &str)] = &[
-    // (Ticker Yahoo, Rótulo Amigável, Código Juros BC, Código World Bank ISO-3)
-    ("USDBRL=X", "BRL — Real Brasileiro (Brasil)", "BR", "BRA"),
-    ("EURUSD=X", "EUR — Euro (Zona do Euro / Alemanha)", "EU", "DEU"),
-    ("GBPUSD=X", "GBP — Libra Esterlina (Reino Unido)", "GB", "GBR"),
-    ("USDJPY=X", "JPY — Iene Japonês (Japão)", "JP", "JPN"),
-    ("USDCNY=X", "CNY — Yuan Chinês (China)", "CN", "CHN"),
-    ("USDCHF=X", "CHF — Franco Suíço (Suíça)", "CH", "CHE"),
-    ("USDCAD=X", "CAD — Dólar Canadense (Canadá)", "CA", "CAN"),
-    ("AUDUSD=X", "AUD — Dólar Australiano (Austrália)", "AU", "AUS"),
-    ("USDMXN=X", "MXN — Peso Mexicano (México)", "MX", "MEX"),
-    ("USDARS=X", "ARS — Peso Argentino (Argentina)", "AR", "ARG"),
-    ("USDINR=X", "INR — Rúpia Indiana (Índia)", "IN", "IND"),
+    // (Yahoo Ticker, Friendly Label, Central Bank Rate Code, World Bank ISO-3 Code)
+    ("USDBRL=X", "BRL — Brazilian Real (Brazil)", "BR", "BRA"),
+    ("EURUSD=X", "EUR — Euro (Eurozone / Germany)", "EU", "DEU"),
+    ("GBPUSD=X", "GBP — British Pound (United Kingdom)", "GB", "GBR"),
+    ("USDJPY=X", "JPY — Japanese Yen (Japan)", "JP", "JPN"),
+    ("USDCNY=X", "CNY — Chinese Yuan (China)", "CN", "CHN"),
+    ("USDCHF=X", "CHF — Swiss Franc (Switzerland)", "CH", "CHE"),
+    ("USDCAD=X", "CAD — Canadian Dollar (Canada)", "CA", "CAN"),
+    ("AUDUSD=X", "AUD — Australian Dollar (Australia)", "AU", "AUS"),
+    ("USDMXN=X", "MXN — Mexican Peso (Mexico)", "MX", "MEX"),
+    ("USDARS=X", "ARS — Argentine Peso (Argentina)", "AR", "ARG"),
+    ("USDINR=X", "INR — Indian Rupee (India)", "IN", "IND"),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,8 +79,26 @@ impl Default for UserSettings {
 }
 
 impl UserSettings {
-    /// Retorna o caminho do arquivo de configuração local.
+    /// Returns the path to the local configuration file.
+    /// On macOS when launched from a `.app` bundle, stores settings in
+    /// `~/Library/Application Support/DAX_Economy/config/user_settings.json`.
     pub fn caminho_arquivo() -> PathBuf {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                let exe_str = exe.to_string_lossy();
+                if exe_str.contains(".app/Contents/MacOS") {
+                    if let Ok(home) = std::env::var("HOME") {
+                        return PathBuf::from(home)
+                            .join("Library")
+                            .join("Application Support")
+                            .join("DAX_Economy")
+                            .join("config")
+                            .join("user_settings.json");
+                    }
+                }
+            }
+        }
         PathBuf::from("config").join("user_settings.json")
     }
 
@@ -158,7 +176,7 @@ impl UserSettings {
             let _ = fs::create_dir_all(parent);
         }
         let json_str = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Erro ao serializar configurações: {e}"))?;
-        fs::write(&path, json_str).map_err(|e| format!("Erro ao gravar configurações: {e}"))
+            .map_err(|e| format!("Failed to serialize settings: {e}"))?;
+        fs::write(&path, json_str).map_err(|e| format!("Failed to write settings: {e}"))
     }
 }

@@ -1,18 +1,20 @@
 """
-Módulo de Gerenciamento de Cache Local (SQLite).
-Armazena respostas JSON das APIs financeiras e macroeconômicas para evitar
-requisições repetidas, acelerar a navegação e permitir funcionamento resiliente.
+Local Cache Management Module (SQLite).
+Stores JSON responses from financial and macroeconomic APIs to avoid
+repeated requests, speed up navigation, and enable resilient offline fallback.
 """
 
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Optional
 
-# Caminho padrão para o banco SQLite de cache
+# Default path for the SQLite cache database
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+_env_data_dir = os.environ.get("DAX_DATA_DIR", "").strip()
+DATA_DIR = Path(_env_data_dir) if _env_data_dir else (BASE_DIR / "data")
 CACHE_DB_PATH = DATA_DIR / "cache.db"
 
 

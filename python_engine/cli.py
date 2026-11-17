@@ -1,6 +1,6 @@
 """
-Interface de Linha de Comando (CLI) do Motor Python para comunicação com o Rust (egui).
-Recebe comandos via argumentos de processo e imprime exclusivamente JSON válido em UTF-8 no stdout.
+Python Engine Command Line Interface (CLI) for communication with Rust (egui).
+Receives commands via process arguments and prints exclusively valid UTF-8 JSON to stdout.
 """
 
 import argparse
@@ -71,28 +71,28 @@ def executar_comando(args: argparse.Namespace) -> dict[str, Any]:
 
     return {
         "status": "error",
-        "message": f"Ação desconhecida: {acao}",
+        "message": f"Unknown action: {acao}",
     }
 
 
 def main() -> None:
     _configurar_utf8()
-    parser = argparse.ArgumentParser(description="Motor de Dados Econômicos e Financeiros (Python ↔ Rust)")
+    parser = argparse.ArgumentParser(description="Economic and Financial Data Engine (Python <-> Rust)")
     parser.add_argument(
         "action",
         choices=["overview", "stock", "forex", "interest", "macro", "export_chart"],
-        help="Operação a ser executada pelo motor de dados",
+        help="Operation to be executed by the data engine",
     )
-    parser.add_argument("--ticker", default="PETR4", help="Código da ação (ex.: PETR4, VALE3, AAPL, NVDA)")
-    parser.add_argument("--tickers", default="", help="Lista de tickers separados por vírgula")
-    parser.add_argument("--period", default="1y", help="Período histórico (5d, 1mo, 6mo, 1y, 5y)")
-    parser.add_argument("--currency", default="ORIGINAL", help="Moeda de exibição (ORIGINAL, BRL, USD, EUR)")
-    parser.add_argument("--pairs", default="DX-Y.NYB,USDBRL=X,EURUSD=X,GBPUSD=X,USDJPY=X,USDCNY=X", help="Pares cambiais")
-    parser.add_argument("--countries", default="", help="Códigos de países separados por vírgula")
-    parser.add_argument("--start-year", type=int, default=2018, help="Ano inicial para séries macro/juros")
-    parser.add_argument("--end-year", type=int, default=2024, help="Ano final para séries macro")
-    parser.add_argument("--format", default="plotly", help="Formato de exportação gráfica (plotly ou matplotlib)")
-    parser.add_argument("--no-cache", action="store_true", help="Ignora o cache local e força nova coleta nas APIs")
+    parser.add_argument("--ticker", default="PETR4", help="Stock ticker symbol (e.g., PETR4, VALE3, AAPL, NVDA)")
+    parser.add_argument("--tickers", default="", help="Comma-separated list of tickers")
+    parser.add_argument("--period", default="1y", help="Historical period (5d, 1mo, 6mo, 1y, 5y)")
+    parser.add_argument("--currency", default="ORIGINAL", help="Display currency (ORIGINAL, BRL, USD, EUR)")
+    parser.add_argument("--pairs", default="DX-Y.NYB,USDBRL=X,EURUSD=X,GBPUSD=X,USDJPY=X,USDCNY=X", help="Forex pairs")
+    parser.add_argument("--countries", default="", help="Comma-separated country codes")
+    parser.add_argument("--start-year", type=int, default=2018, help="Start year for macro/interest series")
+    parser.add_argument("--end-year", type=int, default=2024, help="End year for macro series")
+    parser.add_argument("--format", default="plotly", help="Chart export format (plotly or matplotlib)")
+    parser.add_argument("--no-cache", action="store_true", help="Bypass local cache and force fresh API fetch")
 
     try:
         args = parser.parse_args()
@@ -100,7 +100,7 @@ def main() -> None:
     except Exception as exc:
         resposta = {
             "status": "error",
-            "message": f"Falha interna no motor Python: {exc}",
+            "message": f"Internal error in Python engine: {exc}",
             "traceback": traceback.format_exc(),
         }
 

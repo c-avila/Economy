@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-//! Ponto de entrada da aplicação Desktop para Windows 11 — DAX - Data Analysis Exchange (Versão 0.2).
+//! Desktop Application Entry Point (Windows 11 & macOS) — DAX - Data Analysis Exchange (v0.2).
 
 mod app;
 mod bridge;
@@ -13,7 +13,7 @@ use eframe::egui;
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("DAX - Data Analysis Exchange (v0.2) — Ações, Moedas (DXY), Juros Globais & Socioeconomia")
+            .with_title("DAX - Data Analysis Exchange (v0.2) — Equities, FX (DXY), Global Rates & Macroeconomics")
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([1024.0, 640.0]),
         ..Default::default()

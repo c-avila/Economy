@@ -25,8 +25,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "PETR4.SA": {
         "codigo_curto": "PETR4",
         "nome": "Petrobras PN",
-        "setor": "Petróleo, Gás e Biocombustíveis",
-        "pais": "Brasil",
+        "setor": "Oil, Gas & Biofuels",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 38.62,
         "mcap_bi": 504.2,
@@ -39,8 +39,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "VALE3.SA": {
         "codigo_curto": "VALE3",
         "nome": "Vale ON",
-        "setor": "Mineração e Siderurgia",
-        "pais": "Brasil",
+        "setor": "Mining & Steel",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 57.01,
         "mcap_bi": 258.9,
@@ -53,8 +53,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "ITUB4.SA": {
         "codigo_curto": "ITUB4",
         "nome": "Itaú Unibanco PN",
-        "setor": "Bancos e Serviços Financeiros",
-        "pais": "Brasil",
+        "setor": "Banks & Financial Services",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 36.75,
         "mcap_bi": 342.8,
@@ -67,8 +67,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "BBDC4.SA": {
         "codigo_curto": "BBDC4",
         "nome": "Bradesco PN",
-        "setor": "Bancos e Serviços Financeiros",
-        "pais": "Brasil",
+        "setor": "Banks & Financial Services",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 15.77,
         "mcap_bi": 165.4,
@@ -81,8 +81,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "BBAS3.SA": {
         "codigo_curto": "BBAS3",
         "nome": "Banco do Brasil ON",
-        "setor": "Bancos e Serviços Financeiros",
-        "pais": "Brasil",
+        "setor": "Banks & Financial Services",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 28.70,
         "mcap_bi": 164.1,
@@ -95,8 +95,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "WEGE3.SA": {
         "codigo_curto": "WEGE3",
         "nome": "WEG S.A. ON",
-        "setor": "Bens Industriais e Motores",
-        "pais": "Brasil",
+        "setor": "Industrial Goods & Motors",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 53.40,
         "mcap_bi": 224.1,
@@ -109,8 +109,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "PRIO3.SA": {
         "codigo_curto": "PRIO3",
         "nome": "PRIO S.A. ON",
-        "setor": "Petróleo e Gás",
-        "pais": "Brasil",
+        "setor": "Oil & Gas",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 43.15,
         "mcap_bi": 38.4,
@@ -123,8 +123,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "SUZB3.SA": {
         "codigo_curto": "SUZB3",
         "nome": "Suzano ON",
-        "setor": "Papel e Celulose",
-        "pais": "Brasil",
+        "setor": "Pulp & Paper",
+        "pais": "Brazil",
         "moeda": "BRL",
         "preco_ref": 58.90,
         "mcap_bi": 74.5,
@@ -137,8 +137,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "AAPL": {
         "codigo_curto": "AAPL",
         "nome": "Apple Inc.",
-        "setor": "Tecnologia e Hardware",
-        "pais": "Estados Unidos",
+        "setor": "Technology & Hardware",
+        "pais": "United States",
         "moeda": "USD",
         "preco_ref": 228.50,
         "mcap_bi": 3460.0,
@@ -151,8 +151,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "NVDA": {
         "codigo_curto": "NVDA",
         "nome": "NVIDIA Corporation",
-        "setor": "Semicondutores e IA",
-        "pais": "Estados Unidos",
+        "setor": "Semiconductors & AI",
+        "pais": "United States",
         "moeda": "USD",
         "preco_ref": 138.60,
         "mcap_bi": 3380.0,
@@ -165,8 +165,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "MSFT": {
         "codigo_curto": "MSFT",
         "nome": "Microsoft Corp.",
-        "setor": "Software e Cloud",
-        "pais": "Estados Unidos",
+        "setor": "Software & Cloud",
+        "pais": "United States",
         "moeda": "USD",
         "preco_ref": 424.80,
         "mcap_bi": 3150.0,
@@ -179,8 +179,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "AMZN": {
         "codigo_curto": "AMZN",
         "nome": "Amazon.com Inc.",
-        "setor": "E-Commerce e Cloud",
-        "pais": "Estados Unidos",
+        "setor": "E-Commerce & Cloud",
+        "pais": "United States",
         "moeda": "USD",
         "preco_ref": 208.90,
         "mcap_bi": 2190.0,
@@ -193,8 +193,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "ASML": {
         "codigo_curto": "ASML",
         "nome": "ASML Holding N.V.",
-        "setor": "Semicondutores",
-        "pais": "Países Baixos",
+        "setor": "Semiconductors",
+        "pais": "Netherlands",
         "moeda": "USD",
         "preco_ref": 712.40,
         "mcap_bi": 282.5,
@@ -207,8 +207,8 @@ CATALOGO_ACOES: dict[str, dict[str, Any]] = {
     "SAP": {
         "codigo_curto": "SAP",
         "nome": "SAP SE",
-        "setor": "Software Empresarial",
-        "pais": "Alemanha",
+        "setor": "Enterprise Software",
+        "pais": "Germany",
         "moeda": "USD",
         "preco_ref": 236.10,
         "mcap_bi": 275.4,
@@ -341,14 +341,14 @@ def consultar_acao_detalhada(
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=1800)
         if cached:
-            cached["source_status"] = "Cache Local SQLite"
+            cached["source_status"] = "Local SQLite Cache"
             return cached
 
     meta = CATALOGO_ACOES.get(yf_ticker, {})
     moeda_nativa = meta.get("moeda", "BRL" if yf_ticker.endswith(".SA") else "USD")
     nome_empresa = meta.get("nome", codigo_curto_acao(yf_ticker))
-    setor = meta.get("setor", "Renda Variável")
-    pais = meta.get("pais", "Brasil" if yf_ticker.endswith(".SA") else "Estados Unidos")
+    setor = meta.get("setor", "Equities")
+    pais = meta.get("pais", "Brazil" if yf_ticker.endswith(".SA") else "United States")
 
     df_hist = pd.DataFrame()
     info_yf: dict[str, Any] = {}
@@ -371,7 +371,7 @@ def consultar_acao_detalhada(
 
     if df_hist is None or df_hist.empty or "Close" not in df_hist:
         df_hist = _gerar_ohlcv_contingencia(yf_ticker, period="1y" if period in ("5d", "1mo", "6mo") else period)
-        status_fonte = "Modo Resiliente (Cache/Contingência)"
+        status_fonte = "Resilient Mode (Cache/Fallback)"
 
     df_hist = df_hist.dropna(subset=["Close"]).copy()
 
@@ -648,7 +648,7 @@ def consultar_visao_geral_mercado(
         # TTL de 600 segundos (10 minutos) conforme solicitado
         cached = obter_cache(cache_key, ttl_seconds=600)
         if cached:
-            cached["source_status"] = "Cache Local SQLite (10 min)"
+            cached["source_status"] = "Local SQLite Cache (10 min)"
             return cached
 
     todos_tickers = list(CATALOGO_ACOES.keys())
@@ -663,7 +663,7 @@ def consultar_visao_geral_mercado(
 
     for yf_ticker in todos_tickers:
         detalhe = consultar_acao_detalhada(yf_ticker, period="1mo", moeda_exibicao="ORIGINAL", usar_cache=usar_cache)
-        if detalhe.get("source_status", "").startswith("Modo"):
+        if detalhe.get("source_status", "").startswith("Resilient"):
             status_fonte = detalhe["source_status"]
 
         m = detalhe["metrics"]

@@ -22,52 +22,52 @@ from .cache_manager import obter_cache, salvar_cache
 CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
     "DX-Y.NYB": {
         "codigo_exibicao": "DXY=",
-        "nome": "Índice Dólar Americano (DXY)",
+        "nome": "US Dollar Index (DXY)",
         "moeda_base": "USD",
-        "moeda_cotacao": "Cesta Global",
-        "pais": "Estados Unidos",
+        "moeda_cotacao": "Global Basket",
+        "pais": "United States",
         "interest_code": "US",
         "wb_code": "USA",
     },
     "USDBRL=X": {
         "codigo_exibicao": "USDBRL=X",
-        "nome": "Dólar vs Real Brasileiro (BRL)",
+        "nome": "US Dollar vs Brazilian Real (BRL)",
         "moeda_base": "USD",
         "moeda_cotacao": "BRL",
-        "pais": "Brasil",
+        "pais": "Brazil",
         "interest_code": "BR",
         "wb_code": "BRA",
     },
     "EURUSD=X": {
         "codigo_exibicao": "EURUSD=X",
-        "nome": "Euro vs Dólar Americano (EUR)",
+        "nome": "Euro vs US Dollar (EUR)",
         "moeda_base": "EUR",
         "moeda_cotacao": "USD",
-        "pais": "Zona do Euro / Alemanha",
+        "pais": "Eurozone / Germany",
         "interest_code": "EU",
         "wb_code": "DEU",
     },
     "GBPUSD=X": {
         "codigo_exibicao": "GBPUSD=X",
-        "nome": "Libra Esterlina vs Dólar (GBP)",
+        "nome": "British Pound vs US Dollar (GBP)",
         "moeda_base": "GBP",
         "moeda_cotacao": "USD",
-        "pais": "Reino Unido",
+        "pais": "United Kingdom",
         "interest_code": "GB",
         "wb_code": "GBR",
     },
     "USDJPY=X": {
         "codigo_exibicao": "USDJPY=X",
-        "nome": "Dólar vs Iene Japonês (JPY)",
+        "nome": "US Dollar vs Japanese Yen (JPY)",
         "moeda_base": "USD",
         "moeda_cotacao": "JPY",
-        "pais": "Japão",
+        "pais": "Japan",
         "interest_code": "JP",
         "wb_code": "JPN",
     },
     "USDCNY=X": {
         "codigo_exibicao": "USDCNY=X",
-        "nome": "Dólar vs Yuan Chinês (CNY)",
+        "nome": "US Dollar vs Chinese Yuan (CNY)",
         "moeda_base": "USD",
         "moeda_cotacao": "CNY",
         "pais": "China",
@@ -76,43 +76,43 @@ CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
     },
     "USDCHF=X": {
         "codigo_exibicao": "USDCHF=X",
-        "nome": "Dólar vs Franco Suíço (CHF)",
+        "nome": "US Dollar vs Swiss Franc (CHF)",
         "moeda_base": "USD",
         "moeda_cotacao": "CHF",
-        "pais": "Suíça",
+        "pais": "Switzerland",
         "interest_code": "CH",
         "wb_code": "CHE",
     },
     "USDCAD=X": {
         "codigo_exibicao": "USDCAD=X",
-        "nome": "Dólar vs Dólar Canadense (CAD)",
+        "nome": "US Dollar vs Canadian Dollar (CAD)",
         "moeda_base": "USD",
         "moeda_cotacao": "CAD",
-        "pais": "Canadá",
+        "pais": "Canada",
         "interest_code": "CA",
         "wb_code": "CAN",
     },
     "AUDUSD=X": {
         "codigo_exibicao": "AUDUSD=X",
-        "nome": "Dólar Australiano vs Dólar (AUD)",
+        "nome": "Australian Dollar vs US Dollar (AUD)",
         "moeda_base": "AUD",
         "moeda_cotacao": "USD",
-        "pais": "Austrália",
+        "pais": "Australia",
         "interest_code": "AU",
         "wb_code": "AUS",
     },
     "USDMXN=X": {
         "codigo_exibicao": "USDMXN=X",
-        "nome": "Dólar vs Peso Mexicano (MXN)",
+        "nome": "US Dollar vs Mexican Peso (MXN)",
         "moeda_base": "USD",
         "moeda_cotacao": "MXN",
-        "pais": "México",
+        "pais": "Mexico",
         "interest_code": "MX",
         "wb_code": "MEX",
     },
     "USDARS=X": {
         "codigo_exibicao": "USDARS=X",
-        "nome": "Dólar vs Peso Argentino (ARS)",
+        "nome": "US Dollar vs Argentine Peso (ARS)",
         "moeda_base": "USD",
         "moeda_cotacao": "ARS",
         "pais": "Argentina",
@@ -121,10 +121,10 @@ CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
     },
     "USDINR=X": {
         "codigo_exibicao": "USDINR=X",
-        "nome": "Dólar vs Rúpia Indiana (INR)",
+        "nome": "US Dollar vs Indian Rupee (INR)",
         "moeda_base": "USD",
         "moeda_cotacao": "INR",
-        "pais": "Índia",
+        "pais": "India",
         "interest_code": "IN",
         "wb_code": "IND",
     },
@@ -327,7 +327,7 @@ def consultar_moedas_e_dxy(
     if usar_cache:
         cached = obter_cache(cache_key, ttl_seconds=1800)
         if cached:
-            cached["source_status"] = "Cache Local SQLite"
+            cached["source_status"] = "Local SQLite Cache"
             return cached
 
     itens_resultado: list[dict[str, Any]] = []
@@ -344,7 +344,7 @@ def consultar_moedas_e_dxy(
 
         if df_hist is None or df_hist.empty or "Close" not in df_hist:
             df_hist = _gerar_serie_cambial_contingencia(yf_ticker, period=period)
-            status_fonte = "Modo Resiliente (Cache/Contingência)"
+            status_fonte = "Resilient Mode (Cache/Fallback)"
 
         df_hist = df_hist.dropna(subset=["Close"]).copy()
         if df_hist.empty:
@@ -392,7 +392,7 @@ def consultar_moedas_e_dxy(
             yf_ticker,
             {
                 "codigo_exibicao": yf_ticker,
-                "nome": f"Par Cambial {yf_ticker}",
+                "nome": f"FX Pair {yf_ticker}",
                 "moeda_base": yf_ticker[:3],
                 "moeda_cotacao": yf_ticker[3:6],
                 "pais": "Global",

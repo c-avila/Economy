@@ -61,29 +61,113 @@ impl PythonBridge {
         msgs
     }
 
-    /// Detecta o executável Python prioritariamente no ambiente isolado `.venv` do Windows 11.
-    fn detectar_executavel_python() -> String {
-        let candidatos = [
-            r".venv\Scripts\python.exe",
-            r"venv\Scripts\python.exe",
-            ".venv/bin/python",
-        ];
-        for caminho in candidatos {
-            if Path::new(caminho).exists() {
-                return caminho.to_string();
+    /// Resolves the working directory containing `python_engine` and optional writable data dir.
+    /// On macOS `.app` bundles, `python_engine` is located in `Contents/Resources` and writable
+    /// data (`cache.db`, `exports/`) is stored in `~/Library/Application Support/DAX_Economy/data`.
+    fn resolver_diretorios() -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(macos_dir) = exe.parent() {
+                    let exe_str = exe.to_string_lossy();
+                    if exe_str.contains(".app/Contents/MacOS") {
+                        if let Some(contents_dir) = macos_dir.parent() {
+                            let resources_dir = contents_dir.join("Resources");
+                            let data_dir = std::env::var("HOME").ok().map(|h| {
+                                std::path::PathBuf::from(h)
+                                    .join("Library")
+                                    .join("Application Support")
+                                    .join("DAX_Economy")
+                                    .join("data")
+                            });
+                            if resources_dir.join("python_engine").exists() {
+                                return (Some(resources_dir), data_dir);
+                            }
+                        }
+                    }
+                }
             }
         }
-        "python".to_string()
+        (None, None)
     }
 
-    /// Executa `python -m python_engine.cli ...` e retorna a saída JSON bruta.
+    /// Detects the Python executable, prioritizing the isolated `.venv` environment
+    /// on both Windows 11 and macOS/Linux.
+    fn detectar_executavel_python(working_dir: Option<&Path>) -> String {
+        let mut candidatos: Vec<std::path::PathBuf> = Vec::new();
+
+        if let Some(base) = working_dir {
+            candidatos.push(base.join(".venv").join("bin").join("python3"));
+            candidatos.push(base.join(".venv").join("bin").join("python"));
+        }
+
+        #[cfg(target_os = "macos")]
+        if let Ok(home) = std::env::var("HOME") {
+            let app_venv = std::path::PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("DAX_Economy")
+                .join(".venv")
+                .join("bin");
+            candidatos.push(app_venv.join("python3"));
+            candidatos.push(app_venv.join("python"));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            candidatos.push(std::path::PathBuf::from(r".venv\Scripts\python.exe"));
+            candidatos.push(std::path::PathBuf::from(r"venv\Scripts\python.exe"));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            candidatos.push(std::path::PathBuf::from(".venv/bin/python3"));
+            candidatos.push(std::path::PathBuf::from(".venv/bin/python"));
+            candidatos.push(std::path::PathBuf::from("venv/bin/python3"));
+        }
+
+        for caminho in candidatos {
+            if caminho.exists() {
+                return caminho.to_string_lossy().to_string();
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            "python".to_string()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            for sys_py in [
+                "python3",
+                "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+                "/opt/homebrew/bin/python3",
+                "/usr/local/bin/python3",
+            ] {
+                if sys_py == "python3" || Path::new(sys_py).exists() {
+                    return sys_py.to_string();
+                }
+            }
+            "python3".to_string()
+        }
+    }
+
+    /// Runs `python -m python_engine.cli ...` and returns raw JSON output.
     fn executar_cli_python(args: &[String]) -> Result<String, String> {
-        let python_bin = Self::detectar_executavel_python();
+        let (working_dir, data_dir) = Self::resolver_diretorios();
+        let python_bin = Self::detectar_executavel_python(working_dir.as_deref());
         let mut cmd = Command::new(&python_bin);
+        if let Some(ref wd) = working_dir {
+            cmd.current_dir(wd);
+        }
+        if let Some(ref dd) = data_dir {
+            let _ = std::fs::create_dir_all(dd);
+            cmd.env("DAX_DATA_DIR", dd);
+        }
         cmd.arg("-m").arg("python_engine.cli").args(args);
         cmd.env("PYTHONIOENCODING", "utf-8");
 
-        // No Windows, evita abrir janela preta de console ao disparar subprocesso
+        // On Windows, avoid opening a black console window when spawning subprocess
         #[cfg(target_os = "windows")]
         {
             const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -92,7 +176,7 @@ impl PythonBridge {
 
         let output = cmd.output().map_err(|e| {
             format!(
-                "Não foi possível executar o motor Python ('{python_bin}'). Verifique se o Python e a .venv estão instalados: {e}"
+                "Could not execute Python engine ('{python_bin}'). Please verify Python and .venv are installed: {e}"
             )
         })?;
 
@@ -101,10 +185,10 @@ impl PythonBridge {
 
         if !output.status.success() && stdout_str.is_empty() {
             return Err(format!(
-                "O motor Python retornou erro (código {:?}): {}",
+                "Python engine returned an error (code {:?}): {}",
                 output.status.code(),
                 if stderr_str.is_empty() {
-                    "Sem detalhes adicionais."
+                    "No additional details."
                 } else {
                     &stderr_str
                 }
@@ -112,7 +196,7 @@ impl PythonBridge {
         }
 
         if stdout_str.is_empty() {
-            return Err("O motor Python retornou resposta vazia.".to_string());
+            return Err("Python engine returned an empty response.".to_string());
         }
 
         // Caso alguma biblioteca imprima avisos antes do JSON, extrai a última linha JSON válida
@@ -145,8 +229,8 @@ impl PythonBridge {
             let msg = match Self::executar_cli_python(&args) {
                 Ok(json_str) => match serde_json::from_str::<MarketOverviewResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::OverviewLoaded(resp),
-                    Ok(_) => BridgeMessage::Error(format!("Resposta inesperada no Overview: {json_str}")),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao interpretar JSON do Overview: {e}")),
+                    Ok(_) => BridgeMessage::Error(format!("Unexpected Overview response: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse Overview JSON: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };
@@ -187,8 +271,8 @@ impl PythonBridge {
             let msg = match Self::executar_cli_python(&args) {
                 Ok(json_str) => match serde_json::from_str::<StockDetailResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::StockLoaded(resp),
-                    Ok(_) => BridgeMessage::Error(format!("Erro ao consultar ação: {json_str}")),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao ler dados da ação: {e}")),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying stock: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse stock data: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };
@@ -225,8 +309,8 @@ impl PythonBridge {
             let msg = match Self::executar_cli_python(&args) {
                 Ok(json_str) => match serde_json::from_str::<ForexResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::ForexLoaded(resp),
-                    Ok(_) => BridgeMessage::Error(format!("Erro na consulta de moedas: {json_str}")),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao processar JSON de moedas: {e}")),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying FX rates: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse FX JSON: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };
@@ -262,8 +346,8 @@ impl PythonBridge {
             let msg = match Self::executar_cli_python(&args) {
                 Ok(json_str) => match serde_json::from_str::<InterestResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::InterestLoaded(resp),
-                    Ok(_) => BridgeMessage::Error(format!("Erro na consulta de juros: {json_str}")),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao ler JSON de juros: {e}")),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying interest rates: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse interest rates JSON: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };
@@ -302,8 +386,8 @@ impl PythonBridge {
             let msg = match Self::executar_cli_python(&args) {
                 Ok(json_str) => match serde_json::from_str::<MacroResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::MacroLoaded(resp),
-                    Ok(_) => BridgeMessage::Error(format!("Erro na consulta World Bank: {json_str}")),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao ler JSON macroeconômico: {e}")),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying World Bank: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse macro JSON: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };
@@ -345,7 +429,7 @@ impl PythonBridge {
                 Ok(json_str) => match serde_json::from_str::<ChartExportResponse>(&json_str) {
                     Ok(resp) if resp.status == "ok" => BridgeMessage::ChartExported(resp),
                     Ok(resp) => BridgeMessage::Error(resp.message),
-                    Err(e) => BridgeMessage::Error(format!("Erro ao exportar gráfico: {e}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to export chart: {e}")),
                 },
                 Err(err) => BridgeMessage::Error(err),
             };

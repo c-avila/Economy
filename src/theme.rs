@@ -55,7 +55,7 @@ pub fn cor_variacao(valor: f64) -> Color32 {
 pub fn badge_variacao(ui: &mut Ui, pct: f64) {
     let bg = if pct >= 0.0 { GREEN_UP } else { RED_DOWN };
     let sinal = if pct > 0.0 { "+" } else { "" };
-    let texto = format!("{sinal}{pct:.2}%").replace('.', ",");
+    let texto = format!("{sinal}{pct:.2}%");
 
     egui::Frame::none()
         .fill(bg)
@@ -115,7 +115,7 @@ pub fn formatar_moeda(valor: f64, moeda: &str) -> String {
         "CNY" => "¥",
         _ => moeda,
     };
-    let s = format!("{valor:.2}").replace('.', ",");
+    let s = format!("{valor:.2}");
     format!("{prefixo} {s}")
 }
 
@@ -153,7 +153,7 @@ pub fn renderizar_legenda_abaixo(ui: &mut Ui, itens: &[(Color32, String)]) {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(14.0, 5.0);
                 ui.label(
-                    RichText::new("Legenda:")
+                    RichText::new("Legend:")
                         .size(11.0)
                         .strong()
                         .color(TEXT_MUTED),
