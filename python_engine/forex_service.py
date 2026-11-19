@@ -17,7 +17,7 @@ try:
 except ImportError:
     yf = None
 
-from .cache_manager import is_offline_mode, obter_cache, salvar_cache
+from .cache_manager import end_date_inclusivo, is_offline_mode, obter_cache, salvar_cache
 
 # Catálogo expandido de pares cambiais e Índice Dólar (DXY) com vínculo aos países de Juros (BC) e World Bank
 CATALOGO_MOEDAS: dict[str, dict[str, str]] = {
@@ -241,14 +241,16 @@ def obter_taxas_cambio_usd(usar_cache: bool = True) -> dict[str, float]:
     Retorna quanto 1 USD vale em cada moeda suportada.
     Usado para conversão automática de preços de ações e comparativos.
     """
-    cache_key = "forex_spot_usd_rates_v2"
-    if usar_cache:
-        cached = obter_cache(cache_key, ttl_seconds=1800)
+    cache_key = "forex_spot_usd_rates_v3"
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
         if cached and "rates" in cached:
             return cached["rates"]
 
     rates = dict(TAXAS_USD_FALLBACK)
-    if yf is not None:
+    obteve_real = False
+    if yf is not None and not offline:
         try:
             tickers = [
                 "USDBRL=X", "EURUSD=X", "GBPUSD=X", "USDJPY=X", "USDCNY=X",
@@ -270,6 +272,7 @@ def obter_taxas_cambio_usd(usar_cache: bool = True) -> dict[str, float]:
                 for tk, cod_m, pad in diretos:
                     if tk in close_df and not close_df[tk].dropna().empty:
                         rates[cod_m] = _limpar_float(close_df[tk].dropna().iloc[-1], pad)
+                        obteve_real = True
 
                 invertidos = [
                     ("EURUSD=X", "EUR", 1.085),
@@ -281,10 +284,17 @@ def obter_taxas_cambio_usd(usar_cache: bool = True) -> dict[str, float]:
                         val_usd = _limpar_float(close_df[tk].dropna().iloc[-1], pad)
                         if val_usd > 0:
                             rates[cod_m] = round(1.0 / val_usd, 4)
+                            obteve_real = True
 
-            salvar_cache(cache_key, "forex_rates", {"rates": rates})
+            if obteve_real:
+                salvar_cache(cache_key, "forex_rates", {"rates": rates}, is_real=True)
         except Exception:
             pass
+
+    if not obteve_real:
+        last_real = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=True, somente_real=True)
+        if last_real and "rates" in last_real:
+            return last_real["rates"]
     return rates
 
 
@@ -328,16 +338,17 @@ def consultar_moedas_e_dxy(
 
     has_custom_dates = bool(start_date.strip() and end_date.strip())
     range_key = f"{start_date.strip()}_{end_date.strip()}" if has_custom_dates else period
-    cache_key = f"forex_dashboard_v2_{'_'.join(sorted(pares_norm))}_{range_key}"
+    cache_key = f"forex_dashboard_v3_{'_'.join(sorted(pares_norm))}_{range_key}"
     offline = is_offline_mode()
     if usar_cache or offline:
-        cached = obter_cache(cache_key, ttl_seconds=1800, permitir_expirado=offline)
+        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache (10 min)"
             return cached
 
     itens_resultado: list[dict[str, Any]] = []
     status_fonte = "Yahoo Finance API (Online)"
+    algum_par_real = False
 
     def _fetch_pair_hist(yf_tk: str) -> tuple[str, pd.DataFrame, bool]:
         df_h = pd.DataFrame()
@@ -346,7 +357,11 @@ def consultar_moedas_e_dxy(
             try:
                 tk = yf.Ticker(yf_tk)
                 if has_custom_dates:
-                    df_h = tk.history(start=start_date.strip(), end=end_date.strip(), auto_adjust=True)
+                    df_h = tk.history(
+                        start=start_date.strip(),
+                        end=end_date_inclusivo(end_date.strip()),
+                        auto_adjust=True,
+                    )
                 else:
                     df_h = tk.history(period=period, auto_adjust=True)
             except Exception:
@@ -366,8 +381,18 @@ def consultar_moedas_e_dxy(
         fetched_pairs = list(executor.map(_fetch_pair_hist, pares_norm))
 
     for yf_ticker, df_hist, used_fallback in fetched_pairs:
-        if used_fallback:
+        if not used_fallback:
+            algum_par_real = True
+        elif not algum_par_real:
             status_fonte = "Offline Mode (Fallback)" if offline else "Resilient Mode (Cache/Fallback)"
+
+    if not algum_par_real:
+        last_real_fx = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=True, somente_real=True)
+        if last_real_fx:
+            last_real_fx["source_status"] = "Last Verified Real Data (Local DB)"
+            return last_real_fx
+
+    for yf_ticker, df_hist, _used_fallback in fetched_pairs:
 
         df_hist = df_hist.dropna(subset=["Close"]).copy()
         if df_hist.empty:
@@ -393,7 +418,7 @@ def consultar_moedas_e_dxy(
             else 0.0
         )
 
-        df_plot = df_hist.tail(260)
+        df_plot = df_hist if has_custom_dates else df_hist.tail(260)
         base_100_ini = float(df_plot["Close"].iloc[0]) if float(df_plot["Close"].iloc[0]) != 0 else 1.0
 
         historico = []
@@ -449,5 +474,5 @@ def consultar_moedas_e_dxy(
         "usd_rates": taxas_usd,
         "pairs": itens_resultado,
     }
-    salvar_cache(cache_key, "forex", resposta)
+    salvar_cache(cache_key, "forex", resposta, is_real=algum_par_real)
     return resposta

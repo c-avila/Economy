@@ -93,11 +93,11 @@ def executar_comando(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     if acao == "clear_cache":
-        removed = limpar_cache()
+        removed = limpar_cache(preservar_longo_prazo=True)
         return {
             "status": "ok",
             "removed": removed,
-            "message": f"Local cache cleared ({removed} entries removed).",
+            "message": f"Daily market cache refreshed ({removed} entries cleared; long-term Macro & Interest DB preserved).",
         }
 
     return {

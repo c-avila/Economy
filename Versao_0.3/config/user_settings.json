@@ -1,0 +1,54 @@
+{
+  "favorite_tickers": [
+    "PETR4",
+    "VALE3",
+    "ITUB4",
+    "BBDC4",
+    "BBAS3",
+    "AAPL",
+    "MSFT",
+    "RDOR3",
+    "BVSP"
+  ],
+  "selected_ticker": "PETR4",
+  "selected_period": "1mo",
+  "analysis_start_date": "2026-10-20",
+  "analysis_end_date": "2026-11-20",
+  "display_currency": "ORIGINAL",
+  "selected_forex_pairs": [
+    "USDBRL=X",
+    "EURUSD=X",
+    "GBPUSD=X",
+    "USDJPY=X",
+    "DX-Y.NYB",
+    "USDARS=X"
+  ],
+  "forex_spotlight_three": [
+    "USDBRL=X",
+    "EURUSD=X",
+    "USDJPY=X"
+  ],
+  "disabled_forex_chart_pairs": [],
+  "selected_interest_countries": [
+    "US",
+    "BR",
+    "EU",
+    "GB",
+    "JP",
+    "AR"
+  ],
+  "selected_macro_countries": [
+    "USA",
+    "BRA",
+    "DEU",
+    "GBR",
+    "JPN",
+    "CHN",
+    "ARG"
+  ],
+  "macro_start_year": 2019,
+  "macro_end_year": 2025,
+  "use_cache": true,
+  "dark_mode": true,
+  "offline_mode": false
+}

@@ -1,0 +1,28 @@
+# Artefatos de compilacao do Rust
+/target/
+/target_portable/
+
+# Ambiente virtual isolado do Python e bytecodes
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pacotes gerados para distribuicao Portable
+/dist/
+
+# Cache temporario e banco SQLite de execucao local
+/data/cache.db
+/data/cache.db-journal
+/data/cache.db-wal
+/data/cache.db-shm
+/data/macro_permanent.json
+/data/mpl_cache/
+/data/exports/
+
+# Credenciais privadas e logs temporarios
+.env
+erros.txt
+*.log
+

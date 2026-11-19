@@ -243,3 +243,182 @@ pub fn renderizar_legenda_abaixo(ui: &mut Ui, itens: &[(Color32, String)]) {
             });
         });
 }
+
+/// Euclidean distance in screen pixels from point `p` to line segment `[a, b]`.
+pub fn distancia_ponto_segmento(p: Pos2, a: Pos2, b: Pos2) -> f32 {
+    let ab = b - a;
+    let len_sq = ab.length_sq();
+    if len_sq <= 1e-5 {
+        return p.distance(a);
+    }
+    let t = ((p - a).dot(ab) / len_sq).clamp(0.0, 1.0);
+    let proj = a + t * ab;
+    p.distance(proj)
+}
+
+/// Checks if the mouse pointer is directly over the plotted line (`<= raio_px` in screen pixels).
+/// Returns `Some((nearest_data_index, pixel_distance_to_line, screen_pos_of_data_point))` only when
+/// the cursor is hovering over the line.
+pub fn encontrar_ponto_serie_sob_mouse(
+    plot_ui: &egui_plot::PlotUi,
+    pontos: &[[f64; 2]],
+    raio_px: f32,
+) -> Option<(usize, f32, Pos2)> {
+    if pontos.is_empty() {
+        return None;
+    }
+    let plot_rect = plot_ui.response().rect;
+    let mouse_pos = plot_ui.ctx().pointer_hover_pos()?;
+    if !plot_rect.contains(mouse_pos) {
+        return None;
+    }
+
+    let screen_pts: Vec<Pos2> = pontos
+        .iter()
+        .map(|pt| plot_ui.screen_from_plot(egui_plot::PlotPoint::new(pt[0], pt[1])))
+        .collect();
+
+    if screen_pts.len() == 1 {
+        let d = mouse_pos.distance(screen_pts[0]);
+        return if d <= raio_px {
+            Some((0, d, screen_pts[0]))
+        } else {
+            None
+        };
+    }
+
+    let mut menor_dist_seg = f32::INFINITY;
+    let mut seg_mais_proximo = 0_usize;
+
+    for i in 0..(screen_pts.len() - 1) {
+        let d = distancia_ponto_segmento(mouse_pos, screen_pts[i], screen_pts[i + 1]);
+        if d < menor_dist_seg {
+            menor_dist_seg = d;
+            seg_mais_proximo = i;
+        }
+    }
+
+    if menor_dist_seg > raio_px {
+        return None;
+    }
+
+    // Choose the closer data vertex of the hovered segment (or neighbor by X)
+    let p_a = screen_pts[seg_mais_proximo];
+    let p_b = screen_pts[seg_mais_proximo + 1];
+    let idx_escolhido = if (mouse_pos.x - p_a.x).abs() <= (mouse_pos.x - p_b.x).abs() {
+        seg_mais_proximo
+    } else {
+        seg_mais_proximo + 1
+    };
+
+    Some((idx_escolhido, menor_dist_seg, screen_pts[idx_escolhido]))
+}
+
+/// Draws an edge-aware floating tooltip showing ONLY the hovered variable's name, value, and date.
+/// Automatically flips position (left/right/above/below) when the mouse is near any border of the chart
+/// so the tooltip never disappears or gets clipped.
+pub fn desenhar_tooltip_serie_borda_segura(
+    plot_ui: &egui_plot::PlotUi,
+    anchor_screen: Pos2,
+    cor_serie: Color32,
+    titulo_serie: &str,
+    linha_valor: &str,
+    linha_data: &str,
+) {
+    let ctx = plot_ui.ctx();
+    let plot_rect = plot_ui.response().rect;
+    let screen_rect = ctx.screen_rect();
+    let mouse_pos = ctx.pointer_hover_pos().unwrap_or(anchor_screen);
+    let dark = ctx.style().visuals.dark_mode;
+    let pal = palette(dark);
+
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &format!("▬ {titulo_serie}\n"),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::proportional(12.5),
+            color: cor_serie,
+            ..Default::default()
+        },
+    );
+    job.append(
+        &format!("{linha_valor}\n"),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::proportional(12.5),
+            color: pal.text_primary,
+            ..Default::default()
+        },
+    );
+    job.append(
+        &format!("📅 {linha_data}"),
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::proportional(11.5),
+            color: pal.text_muted,
+            ..Default::default()
+        },
+    );
+
+    let galley = ctx.fonts(|f| f.layout_job(job));
+    let pad = Vec2::new(16.0, 12.0);
+    let box_size = galley.size() + pad;
+
+    // Default position: top-right of the mouse pointer
+    let mut x = mouse_pos.x + 14.0;
+    let mut y = mouse_pos.y - box_size.y - 10.0;
+
+    // Smart border proximity checks against both plot_rect and window screen_rect
+    let limite_dir = plot_rect.right().min(screen_rect.right() - 6.0);
+    let limite_esq = plot_rect.left().max(screen_rect.left() + 6.0);
+    let limite_topo = plot_rect.top().max(screen_rect.top() + 6.0);
+    let limite_fundo = plot_rect.bottom().min(screen_rect.bottom() - 6.0);
+
+    // Near right edge -> flip tooltip to the left of the cursor
+    if x + box_size.x > limite_dir - 6.0 {
+        x = mouse_pos.x - box_size.x - 14.0;
+    }
+    // Near left edge -> clamp inside left border
+    if x < limite_esq + 4.0 {
+        x = limite_esq + 4.0;
+    }
+    // Near top edge -> flip tooltip below the cursor
+    if y < limite_topo + 4.0 {
+        y = mouse_pos.y + 16.0;
+    }
+    // Near bottom edge -> shift tooltip above bottom border
+    if y + box_size.y > limite_fundo - 4.0 {
+        y = (mouse_pos.y - box_size.y - 12.0).max(limite_topo + 4.0);
+    }
+
+    let layer_id = egui::LayerId::new(
+        egui::Order::Tooltip,
+        egui::Id::new("dax_chart_smart_edge_tooltip"),
+    );
+    let painter = ctx.layer_painter(layer_id);
+
+    // Highlighted dot on the exact hovered point of the curve
+    if plot_rect.contains(anchor_screen) {
+        painter.circle_filled(anchor_screen, 5.5, cor_serie);
+        painter.circle_stroke(anchor_screen, 5.5, Stroke::new(1.5_f32, Color32::WHITE));
+    }
+
+    let box_rect = egui::Rect::from_min_size(Pos2::new(x, y), box_size);
+    let bg_fill = if dark {
+        Color32::from_rgba_unmultiplied(15, 21, 33, 246)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 248)
+    };
+    painter.rect(
+        box_rect,
+        Rounding::same(6.0),
+        bg_fill,
+        Stroke::new(1.4_f32, cor_serie),
+    );
+    painter.galley(
+        box_rect.min + Vec2::new(8.0, 6.0),
+        galley,
+        pal.text_primary,
+    );
+}

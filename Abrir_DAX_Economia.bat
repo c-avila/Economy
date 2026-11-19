@@ -10,7 +10,8 @@ python -m venv .venv
 ".venv\Scripts\pip.exe" install -r requirements.txt
 
 :VERIFICAR_EXE
-:: 2. Se o executavel DAX_Economia.exe ja estiver na raiz, abre instantaneamente!
+:: 2. Sincroniza o executavel mais recente v0.3 e abre instantaneamente!
+if exist "DAX_Economia_v0.3.exe" copy /y "DAX_Economia_v0.3.exe" "DAX_Economia.exe" >nul 2>nul
 if exist "DAX_Economia.exe" goto ABRIR_DIRETO
 
 if not exist "target_portable\release\dax_economia_desktop.exe" goto TENTAR_TARGET_PADRAO

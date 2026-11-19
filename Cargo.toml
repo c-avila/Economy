@@ -1,9 +1,9 @@
 [package]
 name = "dax_economia_desktop"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-authors = ["Arquiteto de Software & Economista Quantitativo"]
-description = "DAX - Data Analysis Exchange (v0.2) — Plataforma Desktop Windows 11 para Análise de Ações, Câmbio (DXY), Juros Globais e Indicadores Macroeconômicos"
+authors = ["Clayton J C P Avila"]
+description = "DAX - Data Analysis Exchange (v0.3) — Plataforma Desktop Windows 11 & macOS para Análise de Ações, Câmbio (DXY), Juros Globais e Indicadores Macroeconômicos"
 
 [dependencies]
 eframe = { version = "0.29", default-features = true, features = ["persistence"] }

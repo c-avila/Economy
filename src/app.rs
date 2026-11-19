@@ -9,14 +9,15 @@
 //! - Sincronização automática dos países entre (b) Moedas, (c) Juros e (d) Socioeconomia (WB).
 
 use crate::bridge::{BridgeMessage, PythonBridge};
-use crate::config::{UserSettings, CATALOGO_MOEDAS_PAISES};
+use crate::config::{UserSettings, CATALOGO_MOEDAS_PAISES, CATALOGO_PAISES_MACRO};
 use crate::models::{
     ForexResponse, InterestResponse, MacroResponse, MarketOverviewResponse, StockDetailResponse,
 };
 use crate::theme::{
     aplicar_tema_dax, badge_variacao, card_frame_mode, cor_variacao, desenhar_sparkline,
-    formatar_moeda, hero_blue_frame, palette, renderizar_legenda_abaixo, ThemePalette,
-    ACCENT_ORANGE, GREEN_UP, RED_DOWN,
+    desenhar_tooltip_serie_borda_segura, distancia_ponto_segmento,
+    encontrar_ponto_serie_sob_mouse, formatar_moeda, hero_blue_frame, palette,
+    renderizar_legenda_abaixo, ThemePalette, ACCENT_ORANGE, GREEN_UP, RED_DOWN,
 };
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke, Ui, Vec2};
 use egui_extras::{Column, TableBuilder};
@@ -85,6 +86,7 @@ pub struct DaxEconomiaApp {
 
     // Estado de controles da Aba (d) Socioeconomia (World Bank)
     pub selected_wb_indicator: String,
+    pub macro_country_to_add: String,
 
     // Estado de controles da Aba (e) Dashboard & Scanner (Dax2 e Dax4)
     pub dashboard_mode: DashboardViewMode,
@@ -131,6 +133,7 @@ impl DaxEconomiaApp {
             conv_to: "BRL".to_string(),
             currency_to_add: "USDCHF=X".to_string(),
             selected_wb_indicator: "gdp_total_bi".to_string(),
+            macro_country_to_add: "FRA".to_string(),
             dashboard_mode: DashboardViewMode::CardsDax2,
             scanner_search: String::new(),
             scanner_country: "All countries".to_string(),
@@ -153,12 +156,20 @@ impl DaxEconomiaApp {
     }
 
     fn parsed_start_year(&self) -> i32 {
-        self.settings
+        let end_y = self.parsed_end_year();
+        let raw_start = self
+            .settings
             .analysis_start_date
             .get(..4)
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(self.settings.macro_start_year)
-            .clamp(1990, 2026)
+            .clamp(1990, 2025);
+        // Ensure annual macroeconomic & interest series always span at least 5 years (e.g. 2019..2025)
+        if end_y - raw_start < 4 {
+            (end_y - 6).clamp(2018, 2021)
+        } else {
+            raw_start
+        }
     }
 
     fn parsed_end_year(&self) -> i32 {
@@ -167,7 +178,7 @@ impl DaxEconomiaApp {
             .get(..4)
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(self.settings.macro_end_year)
-            .clamp(self.parsed_start_year(), 2026)
+            .clamp(2020, 2025)
     }
 
     fn apply_date_preset(&mut self, days_back: i64, period_code: &str, ctx: &egui::Context) {
@@ -196,17 +207,67 @@ impl DaxEconomiaApp {
         let pairs = self.settings.selected_forex_pairs.clone();
         let int_countries = self.settings.selected_interest_countries.clone();
         let macro_countries = self.settings.selected_macro_countries.clone();
-        let s_yr = self.parsed_start_year();
-        let e_yr = self.parsed_end_year();
+        let s_yr = self.settings.macro_start_year;
+        let e_yr = self.settings.macro_end_year;
 
         self.bridge
             .request_stock(&ticker, &period, &start_d, &end_d, &curr, force_refresh, ctx.clone());
         self.bridge
             .request_forex(&pairs, &period, &start_d, &end_d, force_refresh, ctx.clone());
+        // Interest rates & Macroeconomic indicators update on a Monthly cycle, not daily Refresh Now
         self.bridge
-            .request_interest(&int_countries, s_yr, e_yr, force_refresh, ctx.clone());
-        self.bridge
-            .request_macro(&macro_countries, s_yr, e_yr, force_refresh, ctx.clone());
+            .request_interest(&int_countries, s_yr, e_yr, false, ctx.clone());
+        if !force_refresh || self.macro_data.is_none() {
+            if !self.carregar_macro_permanente_se_compativel() {
+                self.bridge
+                    .request_macro(&macro_countries, s_yr, e_yr, false, ctx.clone());
+            }
+        }
+    }
+
+    fn carregar_macro_permanente_se_compativel(&mut self) -> bool {
+        let path = UserSettings::macro_permanent_path();
+        if let Ok(raw) = std::fs::read_to_string(&path) {
+            if let Ok(mut cached) = serde_json::from_str::<MacroResponse>(&raw) {
+                let current_month = chrono::Local::now().format("%Y-%m").to_string();
+                let month_ok = self.settings.offline_mode || cached.cache_month == current_month;
+                let expected: Vec<String> = self
+                    .settings
+                    .selected_macro_countries
+                    .iter()
+                    .map(|c| c.to_uppercase())
+                    .collect();
+                let loaded: Vec<String> = cached
+                    .countries
+                    .iter()
+                    .map(|c| c.iso3.to_uppercase())
+                    .collect();
+                let same_countries = expected.len() == loaded.len()
+                    && expected.iter().all(|c| loaded.contains(c));
+                let same_years = cached.start_year <= self.settings.macro_start_year
+                    && cached.end_year >= self.settings.macro_end_year;
+                if month_ok && same_countries && same_years && cached.indicators_catalog.len() >= 14 {
+                    cached.source_status = if self.settings.offline_mode {
+                        "Offline Mode (Permanent Local Snapshot)".to_string()
+                    } else {
+                        format!("Monthly Local Snapshot ({current_month})")
+                    };
+                    self.macro_data = Some(cached);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn salvar_macro_permanente(data: &MacroResponse) {
+        let path = UserSettings::macro_permanent_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json_str) = serde_json::to_string_pretty(data) {
+            let _ = std::fs::write(path, json_str);
+        }
     }
 
     fn export_csv_and_open(&mut self, filename: &str, headers: &[&str], rows: Vec<Vec<String>>) {
@@ -249,7 +310,38 @@ impl DaxEconomiaApp {
         self.reload_all_with_dates(false, ctx);
     }
 
-    /// Sincroniza os países das Abas (c) e (d) com as moedas selecionadas na Aba (b) e recarrega os dados.
+    /// Constant renewal of daily market data (World Indices, Stocks, Currencies & DXY)
+    /// without touching permanent long-term Macroeconomic & Monthly Interest Rate databases.
+    fn renovar_dados_mercado_diario(&mut self, ctx: &egui::Context) {
+        self.last_indices_refresh = Instant::now();
+        let today = chrono::Local::now().date_naive();
+        if let Ok(saved_end) =
+            chrono::NaiveDate::parse_from_str(self.settings.analysis_end_date.trim(), "%Y-%m-%d")
+        {
+            let diff = (today - saved_end).num_days();
+            if (1..=30).contains(&diff) {
+                self.settings.analysis_end_date = today.format("%Y-%m-%d").to_string();
+                let _ = self.settings.salvar();
+            }
+        }
+
+        let favs = self.settings.favorite_tickers.clone();
+        let ticker = self.settings.selected_ticker.clone();
+        let period = self.settings.selected_period.clone();
+        let start_d = self.settings.analysis_start_date.clone();
+        let end_d = self.settings.analysis_end_date.clone();
+        let curr = self.settings.display_currency.clone();
+        let pairs = self.settings.selected_forex_pairs.clone();
+
+        self.bridge.request_overview(&favs, true, ctx.clone());
+        self.bridge
+            .request_stock(&ticker, &period, &start_d, &end_d, &curr, true, ctx.clone());
+        self.bridge
+            .request_forex(&pairs, &period, &start_d, &end_d, true, ctx.clone());
+    }
+
+    /// Synchronizes Tab (c) Interest Rates with Tab (b) Currencies & DXY.
+    /// Tab (d) Macroeconomic countries remain independent unless the user clicks Sync in Tab (d).
     fn atualizar_moedas_e_sincronizar_paises(&mut self, ctx: &egui::Context) {
         self.settings.sincronizar_paises_com_moedas();
         let _ = self.settings.salvar();
@@ -259,7 +351,6 @@ impl DaxEconomiaApp {
         let start_d = self.settings.analysis_start_date.clone();
         let end_d = self.settings.analysis_end_date.clone();
         let int_countries = self.settings.selected_interest_countries.clone();
-        let macro_countries = self.settings.selected_macro_countries.clone();
         let s_yr = self.parsed_start_year();
         let e_yr = self.parsed_end_year();
 
@@ -267,8 +358,6 @@ impl DaxEconomiaApp {
             .request_forex(&pairs, &period, &start_d, &end_d, false, ctx.clone());
         self.bridge
             .request_interest(&int_countries, s_yr, e_yr, false, ctx.clone());
-        self.bridge
-            .request_macro(&macro_countries, s_yr, e_yr, false, ctx.clone());
     }
 
     /// Processa mensagens assíncronas recebidas da ponte Python.
@@ -308,8 +397,9 @@ impl DaxEconomiaApp {
                     self.error_banner = None;
                 }
                 BridgeMessage::MacroLoaded(data) => {
+                    Self::salvar_macro_permanente(&data);
                     self.status_message = format!(
-                        "World Bank data synchronized ({}) — {}",
+                        "Macroeconomic data saved permanently ({}) — {}",
                         data.source_status, data.updated_at
                     );
                     self.macro_data = Some(data);
@@ -365,13 +455,10 @@ impl DaxEconomiaApp {
                             .strong()
                             .color(GREEN_UP),
                     )
-                    .on_hover_text("Immediately refresh global stock market indices and all quotes")
+                    .on_hover_text("Immediately refresh global stock market indices, equities, and FX quotes")
                     .clicked()
                 {
-                    self.last_indices_refresh = Instant::now();
-                    let favs = self.settings.favorite_tickers.clone();
-                    self.bridge.request_overview(&favs, true, ctx.clone());
-                    self.reload_all_with_dates(true, ctx);
+                    self.renovar_dados_mercado_diario(ctx);
                 }
 
                 ui.separator();
@@ -458,10 +545,18 @@ impl DaxEconomiaApp {
                                                         .strong()
                                                         .color(self.pal().accent_cyan),
                                                 );
+                                                let data_idx = if item.last_date.is_empty() {
+                                                    self.settings.analysis_end_date.as_str()
+                                                } else {
+                                                    item.last_date.as_str()
+                                                };
                                                 ui.label(
-                                                    RichText::new(&item.subtitle)
-                                                        .size(10.0)
-                                                        .color(self.pal().text_muted),
+                                                    RichText::new(format!(
+                                                        "{} • {}",
+                                                        item.subtitle, data_idx
+                                                    ))
+                                                    .size(9.5)
+                                                    .color(self.pal().text_muted),
                                                 );
                                             });
                                             ui.with_layout(
@@ -555,7 +650,7 @@ impl DaxEconomiaApp {
                     .color(GREEN_UP),
             );
             ui.label(
-                RichText::new("v0.2")
+                RichText::new("v0.3")
                     .size(12.5)
                     .strong()
                     .color(self.pal().accent_cyan),
@@ -810,11 +905,13 @@ impl DaxEconomiaApp {
                 self.settings.offline_mode = !self.settings.offline_mode;
                 self.bridge.offline_mode = self.settings.offline_mode;
                 let _ = self.settings.salvar();
-                self.status_message = if self.settings.offline_mode {
-                    "Offline Mode enabled (using local cache & fallback).".into()
+                if self.settings.offline_mode {
+                    self.status_message = "Offline Mode enabled (using local cache & permanent DB).".into();
                 } else {
-                    "Online Mode enabled (live APIs active).".into()
-                };
+                    self.status_message = "Online Mode enabled — refreshing live market data...".into();
+                    let ctx_clone = ui.ctx().clone();
+                    self.renovar_dados_mercado_diario(&ctx_clone);
+                }
             }
             if self.bridge.active_tasks > 0 {
                 ui.horizontal(|ui| {
@@ -952,6 +1049,16 @@ impl DaxEconomiaApp {
 
         let m = &dados.metrics;
         let moeda = &dados.display_currency;
+        let data_ult_candle: String = dados
+            .candles
+            .last()
+            .map(|c| c.date.clone())
+            .unwrap_or_else(|| self.settings.analysis_end_date.clone());
+        let data_pri_candle: String = dados
+            .candles
+            .first()
+            .map(|c| c.date.clone())
+            .unwrap_or_else(|| self.settings.analysis_start_date.clone());
 
         ui.horizontal_wrapped(|ui| {
             ui.label(
@@ -963,8 +1070,8 @@ impl DaxEconomiaApp {
             badge_variacao(ui, m.change_day_pct);
             ui.label(
                 RichText::new(format!(
-                    " | Sector: {} | Country: {} | Currency: {} (FX: {:.4})",
-                    dados.sector, dados.country, dados.display_currency, dados.fx_factor
+                    " | 📅 Quote Date: {} | Sector: {} | Country: {} | Currency: {} (FX: {:.4})",
+                    data_ult_candle, dados.sector, dados.country, dados.display_currency, dados.fx_factor
                 ))
                 .size(12.0)
                 .color(self.pal().text_muted),
@@ -1005,7 +1112,11 @@ impl DaxEconomiaApp {
         ui.columns(5, |cols| {
             hero_blue_frame().show(&mut cols[0], |ui| {
                 ui.set_min_height(74.0);
-                ui.label(RichText::new("CURRENT PRICE").size(11.0).color(self.pal().text_primary));
+                ui.label(
+                    RichText::new(format!("CURRENT PRICE ({data_ult_candle})"))
+                        .size(11.0)
+                        .color(self.pal().text_primary),
+                );
                 ui.label(
                     RichText::new(formatar_moeda(m.current_price, moeda))
                         .size(20.0)
@@ -1015,7 +1126,7 @@ impl DaxEconomiaApp {
                 let seta = if m.change_day_pct >= 0.0 { "⬆" } else { "⬇" };
                 ui.label(
                     RichText::new(
-                        format!("{seta} {:.2}% (today)", m.change_day_pct),
+                        format!("{seta} {:.2}% ({data_ult_candle})", m.change_day_pct),
                     )
                     .size(11.5)
                     .strong()
@@ -1103,8 +1214,8 @@ impl DaxEconomiaApp {
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     RichText::new(format!(
-                        "{} QUOTE ({})",
-                        dados.short_code, dados.display_currency
+                        "{} QUOTE ({}) — 📅 {} to {}",
+                        dados.short_code, dados.display_currency, data_pri_candle, data_ult_candle
                     ))
                     .size(14.0)
                     .strong()
@@ -1129,11 +1240,16 @@ impl DaxEconomiaApp {
             ui.add_space(4.0);
             let candles = &dados.candles;
             let datas_plot: Vec<String> = candles.iter().map(|c| c.date.clone()).collect();
+            let cor_sma20 = self.pal().accent_cyan;
+            let cor_sma50 = Color32::from_rgb(250, 204, 21);
 
             Plot::new("stock_main_plot")
                 .width((largura_max - 36.0).max(400.0))
                 .height(265.0)
                 .allow_scroll(false)
+                .show_x(false)
+                .show_y(false)
+                .label_formatter(|_, _| String::new())
                 .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
@@ -1144,6 +1260,10 @@ impl DaxEconomiaApp {
                     }
                 })
                 .show(ui, |plot_ui| {
+                    // (dist_px, anchor_screen, cor, titulo_serie, linha_valor, linha_data)
+                    let mut melhor_hit: Option<(f32, egui::Pos2, Color32, String, String, String)> =
+                        None;
+
                     match self.stock_chart_mode {
                         StockChartMode::Candlestick => {
                             let mut elementos = Vec::with_capacity(candles.len());
@@ -1165,13 +1285,45 @@ impl DaxEconomiaApp {
                                 );
                             }
                             plot_ui.box_plot(BoxPlot::new(elementos).name("Candles OHLC"));
+
+                            if let Some(mouse_pos) = plot_ui.ctx().pointer_hover_pos() {
+                                if plot_ui.response().rect.contains(mouse_pos) {
+                                    for (i, c) in candles.iter().enumerate() {
+                                        let p_high = plot_ui
+                                            .screen_from_plot(egui_plot::PlotPoint::new(i as f64, c.high));
+                                        let p_low = plot_ui
+                                            .screen_from_plot(egui_plot::PlotPoint::new(i as f64, c.low));
+                                        let d = distancia_ponto_segmento(mouse_pos, p_high, p_low);
+                                        if d <= 11.0
+                                            && melhor_hit.as_ref().map_or(true, |m| d < m.0)
+                                        {
+                                            let p_close = plot_ui.screen_from_plot(
+                                                egui_plot::PlotPoint::new(i as f64, c.close),
+                                            );
+                                            let cor = if c.close >= c.open { GREEN_UP } else { RED_DOWN };
+                                            melhor_hit = Some((
+                                                d,
+                                                p_close,
+                                                cor,
+                                                format!("{} — Candle OHLC", dados.short_code),
+                                                format!(
+                                                    "Close: {} {:.2} (Open: {:.2} | High: {:.2} | Low: {:.2})",
+                                                    dados.display_currency, c.close, c.open, c.high, c.low
+                                                ),
+                                                format!("Date: {}", c.date),
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
                         }
                         StockChartMode::AreaLine => {
-                            let pts_close: PlotPoints = candles
+                            let vec_close: Vec<[f64; 2]> = candles
                                 .iter()
                                 .enumerate()
                                 .map(|(i, c)| [i as f64, c.close])
                                 .collect();
+                            let pts_close: PlotPoints = vec_close.iter().copied().collect();
                             let piso = m.min_52w * 0.96;
                             plot_ui.line(
                                 Line::new(pts_close)
@@ -1180,34 +1332,91 @@ impl DaxEconomiaApp {
                                     .width(2.4_f32)
                                     .fill(piso as f32),
                             );
+                            if let Some((idx, dist, pos_screen)) =
+                                encontrar_ponto_serie_sob_mouse(plot_ui, &vec_close, 13.0)
+                            {
+                                let c = &candles[idx];
+                                melhor_hit = Some((
+                                    dist,
+                                    pos_screen,
+                                    ACCENT_ORANGE,
+                                    format!("{} — Closing Price", dados.short_code),
+                                    format!("Value: {} {:.2}", dados.display_currency, c.close),
+                                    format!("Date: {}", c.date),
+                                ));
+                            }
                         }
                     }
 
                     if self.show_sma20 {
-                        let pts_sma20: PlotPoints = candles
+                        let vec_sma20: Vec<[f64; 2]> = candles
                             .iter()
                             .enumerate()
                             .map(|(i, c)| [i as f64, c.sma20])
                             .collect();
+                        let pts_sma20: PlotPoints = vec_sma20.iter().copied().collect();
                         plot_ui.line(
                             Line::new(pts_sma20)
                                 .name("SMA 20")
-                                .color(self.pal().accent_cyan)
+                                .color(cor_sma20)
                                 .width(1.6_f32),
                         );
+                        if let Some((idx, dist, pos_screen)) =
+                            encontrar_ponto_serie_sob_mouse(plot_ui, &vec_sma20, 13.0)
+                        {
+                            if melhor_hit.as_ref().map_or(true, |m| dist <= m.0) {
+                                let c = &candles[idx];
+                                melhor_hit = Some((
+                                    dist,
+                                    pos_screen,
+                                    cor_sma20,
+                                    format!("{} — SMA 20", dados.short_code),
+                                    format!("Value: {} {:.2}", dados.display_currency, c.sma20),
+                                    format!("Date: {}", c.date),
+                                ));
+                            }
+                        }
                     }
 
                     if self.show_sma50 {
-                        let pts_sma50: PlotPoints = candles
+                        let vec_sma50: Vec<[f64; 2]> = candles
                             .iter()
                             .enumerate()
                             .map(|(i, c)| [i as f64, c.sma50])
                             .collect();
+                        let pts_sma50: PlotPoints = vec_sma50.iter().copied().collect();
                         plot_ui.line(
                             Line::new(pts_sma50)
                                 .name("SMA 50")
-                                .color(Color32::from_rgb(250, 204, 21))
+                                .color(cor_sma50)
                                 .width(1.6_f32),
+                        );
+                        if let Some((idx, dist, pos_screen)) =
+                            encontrar_ponto_serie_sob_mouse(plot_ui, &vec_sma50, 13.0)
+                        {
+                            if melhor_hit.as_ref().map_or(true, |m| dist <= m.0) {
+                                let c = &candles[idx];
+                                melhor_hit = Some((
+                                    dist,
+                                    pos_screen,
+                                    cor_sma50,
+                                    format!("{} — SMA 50", dados.short_code),
+                                    format!("Value: {} {:.2}", dados.display_currency, c.sma50),
+                                    format!("Date: {}", c.date),
+                                ));
+                            }
+                        }
+                    }
+
+                    if let Some((_dist, pos_screen, cor, titulo, valor_str, data_str)) = melhor_hit
+                    {
+                        desenhar_tooltip_serie_borda_segura(
+                            plot_ui,
+                            pos_screen,
+                            cor,
+                            &titulo,
+                            &valor_str,
+                            &data_str,
                         );
                     }
                 });
@@ -1678,10 +1887,15 @@ impl DaxEconomiaApp {
                                     },
                                 );
                             });
+                            let data_fx_ult = par
+                                .history
+                                .last()
+                                .map(|h| h.date.as_str())
+                                .unwrap_or(&self.settings.analysis_end_date);
                             ui.label(
                                 RichText::new(format!(
-                                    "Period change vs USD: {:+.2}%",
-                                    par.change_period_pct
+                                    "Period vs USD: {:+.2}%  |  📅 {}",
+                                    par.change_period_pct, data_fx_ult
                                 ))
                                 .size(10.5)
                                 .color(cor_variacao(par.change_period_pct)),
@@ -1800,6 +2014,9 @@ impl DaxEconomiaApp {
                 .width((largura_max - 36.0).max(400.0))
                 .height(250.0)
                 .allow_scroll(false)
+                .show_x(false)
+                .show_y(false)
+                .label_formatter(|_, _| String::new())
                 .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
@@ -1816,6 +2033,9 @@ impl DaxEconomiaApp {
                     }
                 })
                 .show(ui, |plot_ui| {
+                    let mut melhor_hit: Option<(f32, egui::Pos2, Color32, String, String, String)> =
+                        None;
+
                     for (idx_p, par) in fx.pairs.iter().enumerate() {
                         let desativado = self
                             .settings
@@ -1825,7 +2045,8 @@ impl DaxEconomiaApp {
                         if desativado {
                             continue;
                         }
-                        let pts: PlotPoints = par
+                        let cor_linha = cores[idx_p % cores.len()];
+                        let vec_pts: Vec<[f64; 2]> = par
                             .history
                             .iter()
                             .enumerate()
@@ -1838,11 +2059,47 @@ impl DaxEconomiaApp {
                                 [i as f64, y]
                             })
                             .collect();
+                        let pts: PlotPoints = vec_pts.iter().copied().collect();
+                        let rotulo = format!("{} ({})", par.display_code, par.country);
                         plot_ui.line(
                             Line::new(pts)
-                                .name(format!("{} ({})", par.display_code, par.country))
-                                .color(cores[idx_p % cores.len()])
+                                .name(&rotulo)
+                                .color(cor_linha)
                                 .width(2.0_f32),
+                        );
+
+                        if let Some((idx, dist, pos_screen)) =
+                            encontrar_ponto_serie_sob_mouse(plot_ui, &vec_pts, 13.0)
+                        {
+                            if melhor_hit.as_ref().map_or(true, |m| dist < m.0) {
+                                if let Some(h) = par.history.get(idx) {
+                                    let val_str = if self.forex_base100_mode {
+                                        format!("Value (Base 100): {:.2} (Quote: {:.4})", h.base100, h.close)
+                                    } else {
+                                        format!("Value: {:.4}", h.close)
+                                    };
+                                    melhor_hit = Some((
+                                        dist,
+                                        pos_screen,
+                                        cor_linha,
+                                        rotulo,
+                                        val_str,
+                                        format!("Date: {}", h.date),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some((_dist, pos_screen, cor, titulo, valor_str, data_str)) = melhor_hit
+                    {
+                        desenhar_tooltip_serie_borda_segura(
+                            plot_ui,
+                            pos_screen,
+                            cor,
+                            &titulo,
+                            &valor_str,
+                            &data_str,
                         );
                     }
                 });
@@ -1982,24 +2239,8 @@ impl DaxEconomiaApp {
     // ═══════════════════════════════════════════════════════════════════════
     // ABA (c): TAXAS DE JUROS GLOBAIS — SINCRONIZADA COM (b) + EIXO DE ANOS
     // ═══════════════════════════════════════════════════════════════════════
-    fn renderizar_aba_juros(&mut self, ui: &mut Ui, _ctx: &egui::Context, largura_max: f32) {
+    fn renderizar_aba_juros(&mut self, ui: &mut Ui, ctx: &egui::Context, largura_max: f32) {
         ui.set_max_width(largura_max);
-
-        self.card().show(ui, |ui| {
-            ui.set_max_width(largura_max - 20.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    RichText::new(
-                        "🏦 Central Bank Policy Rates — Countries synced with currencies selected in (b) Currencies & DXY:",
-                    )
-                    .size(13.0)
-                    .strong()
-                    .color(self.pal().accent_cyan),
-                );
-            });
-        });
-
-        ui.add_space(8.0);
 
         let Some(juros) = self.interest_data.clone() else {
             ui.label(
@@ -2007,6 +2248,45 @@ impl DaxEconomiaApp {
             );
             return;
         };
+
+        let pal = self.pal();
+        self.card().show(ui, |ui| {
+            ui.set_max_width(largura_max - 20.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new(
+                        "🏦 Central Bank Policy Rates — Synced with (b) Currencies  |  📅 Update Cycle: Monthly",
+                    )
+                    .size(13.0)
+                    .strong()
+                    .color(pal.accent_cyan),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        " | Global Date Range: {} → {} | {}",
+                        self.settings.analysis_start_date,
+                        self.settings.analysis_end_date,
+                        juros.source_status
+                    ))
+                    .size(11.5)
+                    .color(pal.text_muted),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .small_button("🔄 Update Rates (Monthly)")
+                        .on_hover_text("Manually fetch fresh Central Bank policy rates from FRED / BCB")
+                        .clicked()
+                    {
+                        let countries = self.settings.selected_interest_countries.clone();
+                        let s_yr = self.parsed_start_year();
+                        let e_yr = self.parsed_end_year();
+                        self.bridge.request_interest(&countries, s_yr, e_yr, true, ctx.clone());
+                    }
+                });
+            });
+        });
+
+        ui.add_space(8.0);
 
         // 1. GRADE DE CARDS COM A TAXA DE JUROS ATUAL DOS EUA E DE TODOS OS OUTROS PAÍSES SELECIONADOS
         // Dividido em linhas de 3 colunas para caber 100% dentro da janela aberta sem extrapolar!
@@ -2034,10 +2314,18 @@ impl DaxEconomiaApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
+                                    let ult_data_j = item
+                                        .history
+                                        .last()
+                                        .map(|h| h.date.as_str())
+                                        .unwrap_or("--");
                                     ui.label(
-                                        RichText::new(format!("Series: {}", item.series_code))
-                                            .size(10.5)
-                                            .color(self.pal().accent_cyan),
+                                        RichText::new(format!(
+                                            "Series: {} | 📅 {}",
+                                            item.series_code, ult_data_j
+                                        ))
+                                        .size(10.5)
+                                        .color(self.pal().accent_cyan),
                                     );
                                 },
                             );
@@ -2098,12 +2386,27 @@ impl DaxEconomiaApp {
             );
             ui.add_space(4.0);
 
+            // Filter history by multi-year window (at least 12 months) so all countries share the exact same timeline
+            let start_ym_str = format!("{:04}-01", self.parsed_start_year());
+            let start_ym = start_ym_str.as_str();
+            let end_ym = self.settings.analysis_end_date.get(..7).unwrap_or("2026-12");
+
+            let filtrar_hist = |hist: &[crate::models::InterestHistoryPoint]| -> Vec<crate::models::InterestHistoryPoint> {
+                let f: Vec<_> = hist
+                    .iter()
+                    .filter(|h| h.date.as_str() >= start_ym && h.date.as_str() <= end_ym)
+                    .cloned()
+                    .collect();
+                if f.len() >= 12 { f } else { hist.to_vec() }
+            };
+
             // Extrai as datas (YYYY-MM) da série mais longa para rotular o eixo dos anos
             let datas_juros: Vec<String> = juros
                 .countries
                 .iter()
-                .max_by_key(|c| c.history.len())
-                .map(|c| c.history.iter().map(|h| h.date.clone()).collect())
+                .map(|c| filtrar_hist(&c.history))
+                .max_by_key(|h| h.len())
+                .map(|h| h.into_iter().map(|pt| pt.date).collect())
                 .unwrap_or_default();
 
             let cores = [
@@ -2138,6 +2441,9 @@ impl DaxEconomiaApp {
                 .width((largura_max - 36.0).max(400.0))
                 .height(250.0)
                 .allow_scroll(false)
+                .show_x(false)
+                .show_y(false)
+                .label_formatter(|_, _| String::new())
                 .x_axis_label("Date / Year")
                 .x_axis_formatter(move |mark, _range| {
                     let idx = mark.value.round() as isize;
@@ -2154,21 +2460,56 @@ impl DaxEconomiaApp {
                     }
                 })
                 .show(ui, |plot_ui| {
+                    let mut melhor_hit: Option<(f32, egui::Pos2, Color32, String, String, String)> =
+                        None;
+
                     for (idx, c) in juros.countries.iter().enumerate() {
-                        let pts: PlotPoints = c
-                            .history
+                        let cor_linha = cores[idx % cores.len()];
+                        let hist_f = filtrar_hist(&c.history);
+                        let vec_pts: Vec<[f64; 2]> = hist_f
                             .iter()
                             .enumerate()
                             .map(|(i, h)| [i as f64, h.rate])
                             .collect();
+                        let pts: PlotPoints = vec_pts.iter().copied().collect();
+                        let rotulo = format!(
+                            "{} — {:.2}% ({})",
+                            c.country_name, c.current_rate_pct, c.series_code
+                        );
                         plot_ui.line(
                             Line::new(pts)
-                                .name(format!(
-                                    "{} — {:.2}% ({})",
-                                    c.country_name, c.current_rate_pct, c.series_code
-                                ))
-                                .color(cores[idx % cores.len()])
+                                .name(&rotulo)
+                                .color(cor_linha)
                                 .width(2.3_f32),
+                        );
+
+                        if let Some((i_pt, dist, pos_screen)) =
+                            encontrar_ponto_serie_sob_mouse(plot_ui, &vec_pts, 13.0)
+                        {
+                            if melhor_hit.as_ref().map_or(true, |m| dist < m.0) {
+                                if let Some(h) = hist_f.get(i_pt) {
+                                    melhor_hit = Some((
+                                        dist,
+                                        pos_screen,
+                                        cor_linha,
+                                        format!("{} ({})", c.country_name, c.series_code),
+                                        format!("Value: {:.2}% p.a.", h.rate),
+                                        format!("Date: {}", h.date),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some((_dist, pos_screen, cor, titulo, valor_str, data_str)) = melhor_hit
+                    {
+                        desenhar_tooltip_serie_borda_segura(
+                            plot_ui,
+                            pos_screen,
+                            cor,
+                            &titulo,
+                            &valor_str,
+                            &data_str,
                         );
                     }
                 });
@@ -2291,34 +2632,56 @@ impl DaxEconomiaApp {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // ABA (d): VARIÁVEIS SOCIOECONÔMICAS (WORLD BANK) — SINCRONIZADA COM (b)
+    // ABA (d): VARIÁVEIS SOCIOECONÔMICAS (WORLD BANK & GLOBAL CYCLES)
     // ═══════════════════════════════════════════════════════════════════════
     fn renderizar_aba_macro(&mut self, ui: &mut Ui, ctx: &egui::Context, largura_max: f32) {
         ui.set_max_width(largura_max);
 
         let Some(macro_resp) = self.macro_data.clone() else {
-            ui.label(
-                RichText::new(
-                    "Loading World Bank socioeconomic indicators...",
-                )
-                .size(15.0),
-            );
+            self.card().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new(
+                            "Loading Macroeconomic & Market-Cycle Indicators (World Bank WDI • FRED • OECD • BLS • S&P Global PMI)...",
+                        )
+                        .size(14.5),
+                    );
+                    if ui.button("🔄 Reload Macroeconomic Data").clicked() {
+                        let list = self.settings.selected_macro_countries.clone();
+                        let s_yr = self.parsed_start_year();
+                        let e_yr = self.parsed_end_year();
+                        self.bridge.request_macro(&list, s_yr, e_yr, true, ctx.clone());
+                    }
+                });
+            });
             return;
         };
+
+        let pal = self.pal();
 
         self.card().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new("🌍 Socioeconomic Indicator:")
+                    RichText::new("🌍 Macroeconomic & Market-Cycle Indicator (14 Series):")
                         .size(13.0)
                         .strong()
-                        .color(self.pal().accent_cyan),
+                        .color(pal.accent_cyan),
                 );
 
                 for ind in &macro_resp.indicators_catalog {
                     let sel = self.selected_wb_indicator == ind.key;
-                    if ui.selectable_label(sel, &ind.name).clicked() {
+                    let resp = ui.selectable_label(sel, &ind.name);
+                    let dica = if !ind.source_name.is_empty() {
+                        format!(
+                            "{}\n• Role: {}\n• Impact: {}\n• Source: {}",
+                            ind.description, ind.category, ind.market_impact, ind.source_name
+                        )
+                    } else {
+                        ind.name.clone()
+                    };
+                    if resp.on_hover_text(dica).clicked() {
                         self.selected_wb_indicator = ind.key.clone();
                     }
                 }
@@ -2326,39 +2689,73 @@ impl DaxEconomiaApp {
 
             ui.separator();
 
+            // Country Selector (same Add/Remove pattern as Tab (b) Currencies & DXY)
+            let qtd_paises = self.settings.selected_macro_countries.len();
             ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new(
-                        "🔗 Countries synced with (b) Currencies & DXY  |  Year Range:",
-                    )
-                    .size(12.0)
+                    RichText::new(format!(
+                        "🏳 Selected Countries ({qtd_paises} / {}):",
+                        CATALOGO_PAISES_MACRO.len()
+                    ))
+                    .size(12.5)
                     .strong()
-                    .color(self.pal().text_primary),
+                    .color(pal.accent_cyan),
                 );
 
-                let mut mudou_ano = false;
-                ui.label("Start:");
+                egui::ComboBox::from_id_salt("cb_add_macro_country")
+                    .selected_text({
+                        CATALOGO_PAISES_MACRO
+                            .iter()
+                            .find(|&&(cod, _)| cod.eq_ignore_ascii_case(&self.macro_country_to_add))
+                            .map(|&(_, nome)| nome)
+                            .unwrap_or(&self.macro_country_to_add)
+                    })
+                    .width(210.0)
+                    .show_ui(ui, |ui| {
+                        for &(cod, nome) in CATALOGO_PAISES_MACRO {
+                            ui.selectable_value(
+                                &mut self.macro_country_to_add,
+                                cod.to_string(),
+                                nome,
+                            );
+                        }
+                    });
+
+                let ja_existe_pais = self
+                    .settings
+                    .selected_macro_countries
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case(&self.macro_country_to_add));
+                let pode_inserir_pais = qtd_paises < 13 && !ja_existe_pais;
+
                 if ui
-                    .add(
-                        egui::DragValue::new(&mut self.settings.macro_start_year)
-                            .range(2000..=self.settings.macro_end_year - 1),
+                    .add_enabled(
+                        pode_inserir_pais,
+                        egui::Button::new(RichText::new("➕ Add Country").strong()),
                     )
-                    .changed()
+                    .on_hover_text("Add selected country to Macroeconomic analysis and save permanently")
+                    .clicked()
                 {
-                    mudou_ano = true;
-                }
-                ui.label("End:");
-                if ui
-                    .add(
-                        egui::DragValue::new(&mut self.settings.macro_end_year)
-                            .range(self.settings.macro_start_year + 1..=2025),
-                    )
-                    .changed()
-                {
-                    mudou_ano = true;
+                    self.settings
+                        .selected_macro_countries
+                        .push(self.macro_country_to_add.clone());
+                    let _ = self.settings.salvar();
+                    let list = self.settings.selected_macro_countries.clone();
+                    self.bridge.request_macro(
+                        &list,
+                        self.settings.macro_start_year,
+                        self.settings.macro_end_year,
+                        false,
+                        ctx.clone(),
+                    );
                 }
 
-                if mudou_ano && ui.button("Apply Period").clicked() {
+                if ui
+                    .button("🔗 Sync with (b) Currencies")
+                    .on_hover_text("Copy the countries of the currencies currently selected in Tab (b)")
+                    .clicked()
+                {
+                    self.settings.sincronizar_macro_com_moedas();
                     let _ = self.settings.salvar();
                     let list = self.settings.selected_macro_countries.clone();
                     self.bridge.request_macro(
@@ -2370,9 +2767,132 @@ impl DaxEconomiaApp {
                     );
                 }
             });
+
+            ui.add_space(4.0);
+            let mut pais_para_retirar: Option<String> = None;
+            let pode_remover_pais = self.settings.selected_macro_countries.len() > 1;
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(6.0, 5.0);
+                for cod_pais in &self.settings.selected_macro_countries {
+                    let nome_curto = CATALOGO_PAISES_MACRO
+                        .iter()
+                        .find(|&&(cod, _)| cod.eq_ignore_ascii_case(cod_pais))
+                        .map(|&(_, nome)| nome)
+                        .unwrap_or(cod_pais.as_str());
+
+                    let rotulo_botao = if pode_remover_pais {
+                        format!("{nome_curto}  ✖")
+                    } else {
+                        nome_curto.to_string()
+                    };
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(rotulo_botao)
+                                    .size(11.0)
+                                    .color(pal.text_primary),
+                            )
+                            .fill(pal.bg_card_alt),
+                        )
+                        .on_hover_text("Click to remove this country from Macroeconomic analysis")
+                        .clicked()
+                        && pode_remover_pais
+                    {
+                        pais_para_retirar = Some(cod_pais.clone());
+                    }
+                }
+            });
+
+            if let Some(rem) = pais_para_retirar {
+                self.settings
+                    .selected_macro_countries
+                    .retain(|c| !c.eq_ignore_ascii_case(&rem));
+                let _ = self.settings.salvar();
+                let list = self.settings.selected_macro_countries.clone();
+                self.bridge.request_macro(
+                    &list,
+                    self.settings.macro_start_year,
+                    self.settings.macro_end_year,
+                    false,
+                    ctx.clone(),
+                );
+            }
+
+            ui.separator();
+
+            // Garantir limites seguros para os DragValues de ano (evitando intervalos invertidos)
+            if self.settings.macro_end_year < 2020 || self.settings.macro_end_year > 2025 {
+                self.settings.macro_end_year = 2025;
+            }
+            if self.settings.macro_start_year >= self.settings.macro_end_year
+                || self.settings.macro_start_year < 2000
+            {
+                self.settings.macro_start_year = (self.settings.macro_end_year - 6).max(2018);
+            }
+
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    RichText::new("📅 Year Range:")
+                        .size(12.0)
+                        .strong()
+                        .color(pal.text_primary),
+                );
+
+                ui.label("Start:");
+                let max_start = (self.settings.macro_end_year - 1).max(2000);
+                ui.add(
+                    egui::DragValue::new(&mut self.settings.macro_start_year)
+                        .range(2000..=max_start),
+                );
+
+                ui.label("End:");
+                let min_end = (self.settings.macro_start_year + 1).min(2025);
+                ui.add(
+                    egui::DragValue::new(&mut self.settings.macro_end_year)
+                        .range(min_end..=2025),
+                );
+
+                if ui
+                    .button(RichText::new("Apply Period").strong())
+                    .on_hover_text("Query macroeconomic series for the selected Start and End years")
+                    .clicked()
+                {
+                    let _ = self.settings.salvar();
+                    let list = self.settings.selected_macro_countries.clone();
+                    self.bridge.request_macro(
+                        &list,
+                        self.settings.macro_start_year,
+                        self.settings.macro_end_year,
+                        false,
+                        ctx.clone(),
+                    );
+                }
+
+                if ui
+                    .button("🔄 Update Macro Data (Online)")
+                    .on_hover_text("Manually fetch fresh World Bank data and update the permanent local database")
+                    .clicked()
+                {
+                    let _ = self.settings.salvar();
+                    let list = self.settings.selected_macro_countries.clone();
+                    self.bridge.request_macro(
+                        &list,
+                        self.settings.macro_start_year,
+                        self.settings.macro_end_year,
+                        true,
+                        ctx.clone(),
+                    );
+                }
+
+                ui.label(
+                    RichText::new(format!(" | Source Status: {}", macro_resp.source_status))
+                        .size(11.0)
+                        .color(pal.text_muted),
+                );
+            });
         });
 
-        ui.add_space(8.0);
+        ui.add_space(6.0);
 
         let ind_meta = macro_resp
             .indicators_catalog
@@ -2382,23 +2902,124 @@ impl DaxEconomiaApp {
             .map(|i| format!("{} ({})", i.name, i.unit))
             .unwrap_or_else(|| self.selected_wb_indicator.clone());
 
-        // Descobre o ano de início real e o ano final real presentes nos dados carregados
-        let mut ano_min = macro_resp.start_year;
-        let mut ano_max = macro_resp.end_year;
+        // Card de Referência Analítica, Impacto Setorial e Fonte Oficial do Indicador Selecionado
+        if let Some(meta) = ind_meta {
+            self.card().show(ui, |ui| {
+                ui.set_max_width(largura_max - 20.0);
+                ui.horizontal_wrapped(|ui| {
+                    let cor_cat = if meta.category.contains("Leading") {
+                        GREEN_UP
+                    } else if meta.category.contains("Coincident") {
+                        pal.accent_cyan
+                    } else {
+                        ACCENT_ORANGE
+                    };
+
+                    ui.label(
+                        RichText::new(format!("📌 {}", meta.name))
+                            .size(14.0)
+                            .strong()
+                            .color(pal.text_primary),
+                    );
+                    ui.label(
+                        RichText::new(format!("[{}]", if meta.category.is_empty() { "Macro Indicator" } else { &meta.category }))
+                            .size(12.0)
+                            .strong()
+                            .color(cor_cat),
+                    );
+                    let freq_txt = if meta.update_frequency.is_empty() {
+                        "Monthly"
+                    } else {
+                        &meta.update_frequency
+                    };
+                    let cor_freq = if freq_txt.contains("Monthly") {
+                        GREEN_UP
+                    } else {
+                        ACCENT_ORANGE
+                    };
+                    ui.label(
+                        RichText::new(format!("📅 Update Cycle: {freq_txt}"))
+                            .size(11.5)
+                            .strong()
+                            .color(cor_freq),
+                    );
+                    ui.label(
+                        RichText::new(format!(" | Series Code: {} | Unit: {}", meta.wb_code, meta.unit))
+                            .size(11.5)
+                            .color(pal.text_muted),
+                    );
+
+                    if !meta.reference_url.is_empty() {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui
+                                .small_button(
+                                    RichText::new("🔗 Open Official Data Source & Methodology")
+                                        .strong()
+                                        .color(pal.accent_cyan),
+                                )
+                                .on_hover_text(&meta.reference_url)
+                                .clicked()
+                            {
+                                let _ = open::that(&meta.reference_url);
+                            }
+                        });
+                    }
+                });
+
+                if !meta.description.is_empty() {
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(format!("• What it shows: {}", meta.description))
+                            .size(12.0)
+                            .color(pal.text_primary),
+                    );
+                }
+                if !meta.market_impact.is_empty() || !meta.source_name.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        if !meta.market_impact.is_empty() {
+                            ui.label(
+                                RichText::new(format!("• Market & Sector Impact: {}", meta.market_impact))
+                                    .size(11.5)
+                                    .strong()
+                                    .color(GREEN_UP),
+                            );
+                        }
+                        if !meta.source_name.is_empty() {
+                            ui.label(
+                                RichText::new(format!("  |  📚 Official Source: {}", meta.source_name))
+                                    .size(11.5)
+                                    .color(pal.accent_cyan),
+                            );
+                        }
+                    });
+                }
+            });
+            ui.add_space(6.0);
+        }
+
+        // Filter series by active Year Range (synchronized with Global Date Range)
+        let target_start = self.settings.macro_start_year;
+        let target_end = self.settings.macro_end_year;
+        let mut ano_min = target_end;
+        let mut ano_max = target_start;
+        let mut encontrou_ano = false;
         for c in &macro_resp.countries {
             if let Some(serie) = c.series.get(&self.selected_wb_indicator) {
-                if let Some(primeiro) = serie.first() {
-                    ano_min = ano_min.min(primeiro.year);
-                }
-                if let Some(ultimo) = serie.last() {
-                    ano_max = ano_max.max(ultimo.year);
+                for pt in serie.iter().filter(|pt| pt.year >= target_start && pt.year <= target_end) {
+                    ano_min = ano_min.min(pt.year);
+                    ano_max = ano_max.max(pt.year);
+                    encontrou_ano = true;
                 }
             }
+        }
+        if !encontrou_ano {
+            ano_min = macro_resp.start_year;
+            ano_max = macro_resp.end_year;
         }
 
         let cores_macro = [
             GREEN_UP,
-            self.pal().accent_cyan,
+            pal.accent_cyan,
             ACCENT_ORANGE,
             Color32::from_rgb(244, 114, 182),
             Color32::from_rgb(167, 139, 250),
@@ -2421,7 +3042,13 @@ impl DaxEconomiaApp {
             })
             .collect();
 
+        let unit_macro_tt = ind_meta
+            .map(|i| i.unit.clone())
+            .unwrap_or_default();
+
         ui.columns(2, |cols| {
+            let unit_line_tt = unit_macro_tt.clone();
+
             self.card().show(&mut cols[0], |ui| {
                 ui.label(
                     RichText::new(format!(
@@ -2435,6 +3062,9 @@ impl DaxEconomiaApp {
                 Plot::new("macro_series_plot_v02")
                     .height(245.0)
                     .allow_scroll(false)
+                    .show_x(false)
+                    .show_y(false)
+                    .label_formatter(|_, _| String::new())
                     .x_grid_spacer(uniform_grid_spacer(|_| [1.0, 2.0, 5.0]))
                     .x_axis_label(format!("Year (Start: {ano_min} — End: {ano_max})"))
                     .x_axis_formatter(move |mark, _range| {
@@ -2452,17 +3082,59 @@ impl DaxEconomiaApp {
                         }
                     })
                     .show(ui, |plot_ui| {
+                        let mut melhor_hit: Option<(f32, egui::Pos2, Color32, String, String, String)> =
+                            None;
+
                         for (idx, c) in macro_resp.countries.iter().enumerate() {
+                            let cor_linha = cores_macro[idx % cores_macro.len()];
                             if let Some(serie) = c.series.get(&self.selected_wb_indicator) {
-                                let pts: PlotPoints =
-                                    serie.iter().map(|pt| [pt.year as f64, pt.value]).collect();
+                                let mut pts_vec: Vec<[f64; 2]> = serie
+                                    .iter()
+                                    .filter(|pt| pt.year >= ano_min && pt.year <= ano_max)
+                                    .map(|pt| [pt.year as f64, pt.value])
+                                    .collect();
+                                if pts_vec.is_empty() {
+                                    pts_vec = serie.iter().map(|pt| [pt.year as f64, pt.value]).collect();
+                                }
+                                let pts: PlotPoints = pts_vec.iter().copied().collect();
+                                let rotulo = format!("{} ({})", c.country_name, c.iso3);
                                 plot_ui.line(
                                     Line::new(pts)
-                                        .name(format!("{} ({})", c.country_name, c.iso3))
-                                        .color(cores_macro[idx % cores_macro.len()])
+                                        .name(&rotulo)
+                                        .color(cor_linha)
                                         .width(2.4_f32),
                                 );
+
+                                if let Some((i_pt, dist, pos_screen)) =
+                                    encontrar_ponto_serie_sob_mouse(plot_ui, &pts_vec, 13.0)
+                                {
+                                    if melhor_hit.as_ref().map_or(true, |m| dist < m.0) {
+                                        let ano_pt = pts_vec[i_pt][0].round() as i32;
+                                        let val_pt = pts_vec[i_pt][1];
+                                        melhor_hit = Some((
+                                            dist,
+                                            pos_screen,
+                                            cor_linha,
+                                            rotulo,
+                                            format!("Value: {:.2} {}", val_pt, unit_line_tt),
+                                            format!("Date (Year): {}", ano_pt),
+                                        ));
+                                    }
+                                }
                             }
+                        }
+
+                        if let Some((_dist, pos_screen, cor, titulo, valor_str, data_str)) =
+                            melhor_hit
+                        {
+                            desenhar_tooltip_serie_borda_segura(
+                                plot_ui,
+                                pos_screen,
+                                cor,
+                                &titulo,
+                                &valor_str,
+                                &data_str,
+                            );
                         }
                     });
 
@@ -2485,10 +3157,14 @@ impl DaxEconomiaApp {
                     .iter()
                     .map(|c| c.iso3.clone())
                     .collect();
+                let unit_bar_tt = unit_macro_tt.clone();
 
                 Plot::new("macro_bar_plot_v02")
                     .height(245.0)
                     .allow_scroll(false)
+                    .show_x(false)
+                    .show_y(false)
+                    .label_formatter(|_, _| String::new())
                     .x_grid_spacer(uniform_grid_spacer(|_| [1.0, 1.0, 1.0]))
                     .x_axis_label(format!("Compared Countries (Data: {ano_min}–{ano_max})"))
                     .x_axis_formatter(move |mark, _range| {
@@ -2504,20 +3180,67 @@ impl DaxEconomiaApp {
                     })
                     .show(ui, |plot_ui| {
                         let mut barras = Vec::new();
+                        let mut dados_barras: Vec<(usize, Color32, String, f64)> = Vec::new();
                         for (idx, c) in macro_resp.countries.iter().enumerate() {
+                            let cor_barra = cores_macro[idx % cores_macro.len()];
                             let val = c
-                                .latest
+                                .series
                                 .get(&self.selected_wb_indicator)
-                                .copied()
-                                .unwrap_or(0.0);
+                                .and_then(|s| {
+                                    s.iter()
+                                        .rev()
+                                        .find(|pt| pt.year >= ano_min && pt.year <= ano_max)
+                                        .map(|pt| pt.value)
+                                })
+                                .unwrap_or_else(|| {
+                                    c.latest
+                                        .get(&self.selected_wb_indicator)
+                                        .copied()
+                                        .unwrap_or(0.0)
+                                });
                             barras.push(
                                 Bar::new(idx as f64, val)
                                     .name(&c.country_name)
                                     .width(0.55)
-                                    .fill(cores_macro[idx % cores_macro.len()]),
+                                    .fill(cor_barra),
                             );
+                            dados_barras.push((
+                                idx,
+                                cor_barra,
+                                format!("{} ({})", c.country_name, c.iso3),
+                                val,
+                            ));
                         }
                         plot_ui.bar_chart(BarChart::new(barras));
+
+                        if let Some(mouse_pos) = plot_ui.ctx().pointer_hover_pos() {
+                            if plot_ui.response().rect.contains(mouse_pos) {
+                                if let Some(coord) = plot_ui.pointer_coordinate() {
+                                    for (idx, cor_barra, rotulo, val) in dados_barras {
+                                        let dx = (coord.x - idx as f64).abs();
+                                        let y_min = val.min(0.0);
+                                        let y_max = val.max(0.0);
+                                        let top_screen = plot_ui.screen_from_plot(
+                                            egui_plot::PlotPoint::new(idx as f64, val),
+                                        );
+                                        let dentro_y =
+                                            (coord.y >= y_min && coord.y <= y_max)
+                                                || (mouse_pos.y - top_screen.y).abs() <= 12.0;
+                                        if dx <= 0.30 && dentro_y {
+                                            desenhar_tooltip_serie_borda_segura(
+                                                plot_ui,
+                                                top_screen,
+                                                cor_barra,
+                                                &rotulo,
+                                                &format!("Value: {:.2} {}", val, unit_bar_tt),
+                                                &format!("Date (Year): {}", ano_max),
+                                            );
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     });
 
                 // Legenda posicionada abaixo do gráfico de Barras Comparativo
@@ -2527,19 +3250,19 @@ impl DaxEconomiaApp {
 
         ui.add_space(8.0);
 
-        // Tabela Consolidada com todas as 6 variáveis socioeconômicas lado a lado
+        // 1. TABELA ORIGINAL PRESERVADA: Core World Bank WDI Socioeconomic Indicators
         self.card().show(ui, |ui| {
             ui.set_max_width(largura_max - 20.0);
             ui.horizontal(|ui| {
                 ui.label(
                     RichText::new(format!(
-                        "📋 Multidimensional Comparative Panel (World Bank — Period {ano_min} to {ano_max})"
+                        "📋 Core Socioeconomic Panel — World Bank WDI (Period {ano_min} to {ano_max})"
                     ))
                     .size(13.5)
                     .strong(),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("📥 Export CSV").clicked() {
+                    if ui.small_button("📥 Export Core WDI CSV").clicked() {
                         let rows: Vec<Vec<String>> = macro_resp
                             .countries
                             .iter()
@@ -2557,7 +3280,7 @@ impl DaxEconomiaApp {
                             })
                             .collect();
                         self.export_csv_and_open(
-                            &format!("worldbank_macro_{ano_min}_{ano_max}.csv"),
+                            &format!("worldbank_core_macro_{ano_min}_{ano_max}.csv"),
                             &[
                                 "Country",
                                 "ISO3",
@@ -2600,7 +3323,7 @@ impl DaxEconomiaApp {
                                 "Population (Millions)",
                             ] {
                                 header.col(|ui| {
-                                    ui.label(RichText::new(h).strong().color(self.pal().accent_cyan));
+                                    ui.label(RichText::new(h).strong().color(pal.accent_cyan));
                                 });
                             }
                         })
@@ -2648,11 +3371,186 @@ impl DaxEconomiaApp {
 
         ui.add_space(8.0);
 
-        // Geographic Ranking by % Change between Start Year and End Year
+        // 2. NOVA TABELA DE CICLO DE MERCADO E SETORES (Leading, Coincident & Lagging Indicators)
+        self.card().show(ui, |ui| {
+            ui.set_max_width(largura_max - 20.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!(
+                        "📊 Market-Cycle & Sector Activity Panel — Leading, Coincident & Lagging Indicators ({ano_max})"
+                    ))
+                    .size(13.5)
+                    .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("📥 Export All 14 Indicators CSV").clicked() {
+                        let rows: Vec<Vec<String>> = macro_resp
+                            .countries
+                            .iter()
+                            .map(|c| {
+                                vec![
+                                    c.country_name.clone(),
+                                    c.iso3.clone(),
+                                    format!("{:.2}", c.latest.get("gdp_total_bi").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("gdp_growth_pct").copied().unwrap_or(0.0)),
+                                    format!("{:.0}", c.latest.get("gdp_per_capita").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("inflation_cpi").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("interest_rate_pct").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("yield_curve_10y2y").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("employment_nfp_yoy").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("unemployment").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("retail_sales_yoy").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("industrial_production_yoy").copied().unwrap_or(0.0)),
+                                    format!("{:.2}", c.latest.get("building_permits_yoy").copied().unwrap_or(0.0)),
+                                    format!("{:.1}", c.latest.get("pmi_composite").copied().unwrap_or(0.0)),
+                                ]
+                            })
+                            .collect();
+                        self.export_csv_and_open(
+                            &format!("macro_market_cycle_all14_{ano_min}_{ano_max}.csv"),
+                            &[
+                                "Country",
+                                "ISO3",
+                                "GDP_Billions_USD",
+                                "Real_GDP_Growth_YoY_Pct",
+                                "GDP_Per_Capita_USD",
+                                "CPI_Inflation_Pct",
+                                "Policy_Interest_Rate_Pct",
+                                "Yield_Curve_10Y2Y_Pct",
+                                "Employment_NFP_YoY_Pct",
+                                "Unemployment_Pct",
+                                "Retail_Sales_YoY_Pct",
+                                "Industrial_Production_YoY_Pct",
+                                "Building_Permits_YoY_Pct",
+                                "PMI_Composite_Index",
+                            ],
+                            rows,
+                        );
+                    }
+                });
+            });
+            ui.add_space(4.0);
+
+            egui::ScrollArea::horizontal()
+                .id_salt("macro_cycle_table_hscroll")
+                .show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .striped(true)
+                        .resizable(true)
+                        .column(Column::initial(155.0))
+                        .column(Column::initial(105.0))
+                        .column(Column::initial(105.0))
+                        .column(Column::initial(118.0))
+                        .column(Column::initial(115.0))
+                        .column(Column::initial(112.0))
+                        .column(Column::initial(115.0))
+                        .column(Column::initial(120.0))
+                        .column(Column::initial(110.0))
+                        .max_scroll_height(205.0)
+                        .header(24.0, |mut header| {
+                            for h in [
+                                "Country (ISO-3)",
+                                "Real GDP (% YoY)",
+                                "Policy Rate (%)",
+                                "Yield Curve (10Y-2Y)",
+                                "NFP / Payrolls (%)",
+                                "Retail Sales (%)",
+                                "Ind. Prod. (% YoY)",
+                                "Building Permits (%)",
+                                "PMI (50+ = Exp.)",
+                            ] {
+                                header.col(|ui| {
+                                    ui.label(RichText::new(h).strong().color(pal.accent_cyan));
+                                });
+                            }
+                        })
+                        .body(|body| {
+                            body.rows(22.0, macro_resp.countries.len(), |mut row| {
+                                let c = &macro_resp.countries[row.index()];
+                                let gdp_g = c.latest.get("gdp_growth_pct").copied().unwrap_or(0.0);
+                                let rate = c.latest.get("interest_rate_pct").copied().unwrap_or(0.0);
+                                let yc = c.latest.get("yield_curve_10y2y").copied().unwrap_or(0.0);
+                                let nfp = c.latest.get("employment_nfp_yoy").copied().unwrap_or(0.0);
+                                let retail = c.latest.get("retail_sales_yoy").copied().unwrap_or(0.0);
+                                let ind_p = c.latest.get("industrial_production_yoy").copied().unwrap_or(0.0);
+                                let permits = c.latest.get("building_permits_yoy").copied().unwrap_or(0.0);
+                                let pmi = c.latest.get("pmi_composite").copied().unwrap_or(50.0);
+
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{} ({})", c.country_name, c.iso3))
+                                            .strong(),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", gdp_g))
+                                            .strong()
+                                            .color(cor_variacao(gdp_g)),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(format!("{:.2}%", rate));
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", yc))
+                                            .strong()
+                                            .color(if yc >= 0.0 { GREEN_UP } else { RED_DOWN }),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", nfp))
+                                            .color(cor_variacao(nfp)),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", retail))
+                                            .color(cor_variacao(retail)),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", ind_p))
+                                            .color(cor_variacao(ind_p)),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:+.2}%", permits))
+                                            .color(cor_variacao(permits)),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{:.1}", pmi))
+                                            .strong()
+                                            .color(if pmi >= 50.0 { GREEN_UP } else { RED_DOWN }),
+                                    );
+                                });
+                            });
+                        });
+                });
+        });
+
+        ui.add_space(8.0);
+
+        // 3. Geographic Ranking by % Change between Start Year and End Year
         let mut ranking: Vec<(String, String, f64, f64, f64)> = Vec::new();
         for c in &macro_resp.countries {
             if let Some(serie) = c.series.get(&self.selected_wb_indicator) {
-                if let (Some(first), Some(last)) = (serie.first(), serie.last()) {
+                let filtrada: Vec<_> = serie
+                    .iter()
+                    .filter(|pt| pt.year >= ano_min && pt.year <= ano_max)
+                    .collect();
+                let (first_opt, last_opt) = if filtrada.len() >= 2 {
+                    (filtrada.first().copied(), filtrada.last().copied())
+                } else {
+                    (serie.first(), serie.last())
+                };
+                if let (Some(first), Some(last)) = (first_opt, last_opt) {
                     let pct = if first.value.abs() > 1e-9 {
                         ((last.value - first.value) / first.value.abs()) * 100.0
                     } else {
@@ -2671,7 +3569,6 @@ impl DaxEconomiaApp {
         ranking.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
 
         if !ranking.is_empty() {
-            let pal = self.pal();
             self.card().show(ui, |ui| {
                 ui.set_max_width(largura_max - 20.0);
                 ui.label(
@@ -2702,6 +3599,186 @@ impl DaxEconomiaApp {
                 }
             });
         }
+
+        ui.add_space(8.0);
+
+        // 4. GUIA DE ANÁLISE DE MERCADO (Leading vs Coincident vs Lagging) & FONTES OFICIAIS DOS DADOS
+        self.card().show(ui, |ui| {
+            ui.set_max_width(largura_max - 20.0);
+            ui.label(
+                RichText::new("🧭 How to Use Macroeconomic Indicators for Market Analysis & Official Data Sources")
+                    .size(14.0)
+                    .strong()
+                    .color(pal.accent_cyan),
+            );
+            ui.add_space(6.0);
+
+            ui.columns(3, |cols| {
+                egui::Frame::none()
+                    .fill(pal.bg_card_alt)
+                    .stroke(Stroke::new(1.0_f32, GREEN_UP))
+                    .rounding(Rounding::same(6.0))
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(&mut cols[0], |ui| {
+                        ui.label(
+                            RichText::new("1. Leading Indicators (Forecast Future Moves)")
+                                .size(12.5)
+                                .strong()
+                                .color(GREEN_UP),
+                        );
+                        ui.add_space(3.0);
+                        ui.label(
+                            RichText::new(
+                                "• PMI (Purchasing Managers' Index): > 50 signals expansion in manufacturing & services; < 50 signals contraction.\n\
+                                 • Yield Curve (10Y - 2Y): Inversion (< 0%) warns of recession risk; steepening signals recovery.\n\
+                                 • Building Permits & Home Sales: Anticipate real estate cycles, credit demand, and consumer confidence.\n\
+                                 • Policy Interest Rates: Forward driver of equity valuation multiples (DCF) and FX flows."
+                            )
+                            .size(11.0)
+                            .color(pal.text_primary),
+                        );
+                    });
+
+                egui::Frame::none()
+                    .fill(pal.bg_card_alt)
+                    .stroke(Stroke::new(1.0_f32, pal.accent_cyan))
+                    .rounding(Rounding::same(6.0))
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(&mut cols[1], |ui| {
+                        ui.label(
+                            RichText::new("2. Coincident Indicators (Current Economy State)")
+                                .size(12.5)
+                                .strong()
+                                .color(pal.accent_cyan),
+                        );
+                        ui.add_space(3.0);
+                        ui.label(
+                            RichText::new(
+                                "• Industrial Production & Inventories: Reflect real-time manufacturing output, energy usage, and supply-chain restocking.\n\
+                                 • Retail Sales & Consumption: Measure household spending strength (the primary 60%–70% driver of GDP).\n\
+                                 • Employment (NFP & Jobless Claims): Non-Farm Payrolls show active hiring; rising jobless claims warn of labor market deterioration."
+                            )
+                            .size(11.0)
+                            .color(pal.text_primary),
+                        );
+                    });
+
+                egui::Frame::none()
+                    .fill(pal.bg_card_alt)
+                    .stroke(Stroke::new(1.0_f32, ACCENT_ORANGE))
+                    .rounding(Rounding::same(6.0))
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(&mut cols[2], |ui| {
+                        ui.label(
+                            RichText::new("3. Lagging Indicators (Confirm Active Trends)")
+                                .size(12.5)
+                                .strong()
+                                .color(ACCENT_ORANGE),
+                        );
+                        ui.add_space(3.0);
+                        ui.label(
+                            RichText::new(
+                                "• Gross Domestic Product (Nominal GDP, Real GDP Growth & GDP per Capita): Confirm broad economic expansion or contraction.\n\
+                                 • Consumer Price Index (CPI Inflation): Confirms price trends, purchasing power erosion, and central bank rate paths.\n\
+                                 • Unemployment Rate: Confirms structural labor slack or tightness after economic turning points."
+                            )
+                            .size(11.0)
+                            .color(pal.text_primary),
+                        );
+                    });
+            });
+
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("📚 Reference Directory — Indicators, Sector Impacts & Official Data Sources (Click '🔗 Source' to open documentation):")
+                    .size(12.5)
+                    .strong()
+                    .color(pal.text_primary),
+            );
+            ui.add_space(4.0);
+
+            egui::ScrollArea::horizontal()
+                .id_salt("macro_sources_reference_hscroll")
+                .show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .striped(true)
+                        .resizable(true)
+                        .column(Column::initial(200.0))
+                        .column(Column::initial(125.0))
+                        .column(Column::initial(110.0))
+                        .column(Column::initial(235.0))
+                        .column(Column::initial(220.0))
+                        .column(Column::initial(90.0))
+                        .max_scroll_height(230.0)
+                        .header(22.0, |mut header| {
+                            for h in [
+                                "Indicator",
+                                "Cycle Role",
+                                "Update Cycle",
+                                "Market & Sector Impact",
+                                "Official Data Source & Series ID",
+                                "Reference Link",
+                            ] {
+                                header.col(|ui| {
+                                    ui.label(RichText::new(h).strong().color(pal.accent_cyan));
+                                });
+                            }
+                        })
+                        .body(|body| {
+                            body.rows(24.0, macro_resp.indicators_catalog.len(), |mut row| {
+                                let ind = &macro_resp.indicators_catalog[row.index()];
+                                let cor_cat = if ind.category.contains("Leading") {
+                                    GREEN_UP
+                                } else if ind.category.contains("Coincident") {
+                                    pal.accent_cyan
+                                } else {
+                                    ACCENT_ORANGE
+                                };
+                                let freq_txt = if ind.update_frequency.is_empty() {
+                                    "Monthly"
+                                } else {
+                                    &ind.update_frequency
+                                };
+                                let cor_freq = if freq_txt.contains("Monthly") {
+                                    GREEN_UP
+                                } else {
+                                    ACCENT_ORANGE
+                                };
+                                row.col(|ui| {
+                                    if ui
+                                        .selectable_label(self.selected_wb_indicator == ind.key, &ind.name)
+                                        .on_hover_text(&ind.description)
+                                        .clicked()
+                                    {
+                                        self.selected_wb_indicator = ind.key.clone();
+                                    }
+                                });
+                                row.col(|ui| {
+                                    ui.label(RichText::new(&ind.category).size(11.0).strong().color(cor_cat));
+                                });
+                                row.col(|ui| {
+                                    ui.label(RichText::new(freq_txt).size(11.0).strong().color(cor_freq));
+                                });
+                                row.col(|ui| {
+                                    ui.label(RichText::new(&ind.market_impact).size(11.0));
+                                });
+                                row.col(|ui| {
+                                    ui.label(RichText::new(&ind.source_name).size(11.0).color(pal.text_muted));
+                                });
+                                row.col(|ui| {
+                                    if !ind.reference_url.is_empty()
+                                        && ui
+                                            .small_button("🔗 Source")
+                                            .on_hover_text(&ind.reference_url)
+                                            .clicked()
+                                    {
+                                        let _ = open::that(&ind.reference_url);
+                                    }
+                                });
+                            });
+                        });
+                });
+        });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2721,15 +3798,29 @@ impl DaxEconomiaApp {
         let mut acao_para_abrir: Option<String> = None;
 
         // 1. GAINERS & LOSERS PANEL (DAX1.PNG)
+        let data_pregao_ov: String = ov
+            .assets
+            .first()
+            .map(|a| a.last_date.clone())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| self.settings.analysis_end_date.clone());
+
         ui.columns(2, |cols| {
             self.card().show(&mut cols[0], |ui| {
                 ui.set_min_height(112.0);
-                ui.label(
-                    RichText::new("⬆ Top Gainers")
-                        .size(15.0)
-                        .strong()
-                        .color(GREEN_UP),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("⬆ Top Gainers")
+                            .size(15.0)
+                            .strong()
+                            .color(GREEN_UP),
+                    );
+                    ui.label(
+                        RichText::new(format!(" (📅 {data_pregao_ov})"))
+                            .size(11.5)
+                            .color(self.pal().text_muted),
+                    );
+                });
                 ui.add_space(6.0);
                 egui::Grid::new("gainers_grid_4cols")
                     .num_columns(4)
@@ -2757,8 +3848,16 @@ impl DaxEconomiaApp {
                                         .fill(GREEN_UP)
                                         .wrap_mode(egui::TextWrapMode::Extend),
                                     );
+                                    let dt_item = if item.last_date.is_empty() {
+                                        data_pregao_ov.as_str()
+                                    } else {
+                                        item.last_date.as_str()
+                                    };
                                     if btn
-                                        .on_hover_text("Click to open asset details")
+                                        .on_hover_text(format!(
+                                            "{} | Price: {:.2} | Date: {}",
+                                            item.code, item.price, dt_item
+                                        ))
                                         .clicked()
                                     {
                                         acao_para_abrir = Some(item.code.clone());
@@ -2772,12 +3871,19 @@ impl DaxEconomiaApp {
 
             self.card().show(&mut cols[1], |ui| {
                 ui.set_min_height(112.0);
-                ui.label(
-                    RichText::new("⬇ Top Losers")
-                        .size(15.0)
-                        .strong()
-                        .color(RED_DOWN),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("⬇ Top Losers")
+                            .size(15.0)
+                            .strong()
+                            .color(RED_DOWN),
+                    );
+                    ui.label(
+                        RichText::new(format!(" (📅 {data_pregao_ov})"))
+                            .size(11.5)
+                            .color(self.pal().text_muted),
+                    );
+                });
                 ui.add_space(6.0);
                 egui::Grid::new("losers_grid_4cols")
                     .num_columns(4)
@@ -2805,8 +3911,16 @@ impl DaxEconomiaApp {
                                         .fill(RED_DOWN)
                                         .wrap_mode(egui::TextWrapMode::Extend),
                                     );
+                                    let dt_item = if item.last_date.is_empty() {
+                                        data_pregao_ov.as_str()
+                                    } else {
+                                        item.last_date.as_str()
+                                    };
                                     if btn
-                                        .on_hover_text("Click to open asset details")
+                                        .on_hover_text(format!(
+                                            "{} | Price: {:.2} | Date: {}",
+                                            item.code, item.price, dt_item
+                                        ))
                                         .clicked()
                                     {
                                         acao_para_abrir = Some(item.code.clone());
@@ -2857,9 +3971,14 @@ impl DaxEconomiaApp {
                                                 .strong()
                                                 .color(self.pal().text_primary),
                                         );
+                                        let dt_card = if ativo.last_date.is_empty() {
+                                            data_pregao_ov.as_str()
+                                        } else {
+                                            ativo.last_date.as_str()
+                                        };
                                         ui.label(
-                                            RichText::new(&ativo.name)
-                                                .size(11.0)
+                                            RichText::new(format!("{} • 📅 {}", ativo.name, dt_card))
+                                                .size(10.5)
                                                 .color(self.pal().text_muted),
                                         );
                                     });
@@ -3148,10 +4267,10 @@ impl eframe::App for DaxEconomiaApp {
             self.disparar_carga_inicial(ctx);
         }
 
-        if self.last_indices_refresh.elapsed() >= Duration::from_secs(600) {
-            self.last_indices_refresh = Instant::now();
-            let favs = self.settings.favorite_tickers.clone();
-            self.bridge.request_overview(&favs, true, ctx.clone());
+        if !self.settings.offline_mode
+            && self.last_indices_refresh.elapsed() >= Duration::from_secs(600)
+        {
+            self.renovar_dados_mercado_diario(ctx);
         }
 
         ctx.request_repaint_after(Duration::from_secs(1));

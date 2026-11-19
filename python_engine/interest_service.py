@@ -48,12 +48,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "DFF",
         "fred_id": "DFF",
         "moeda": "USD",
+        "taxa_atual_ref": 4.33,
         "inflacao_atual": 2.60,
         "historico_ref": [
             ("2019-06", 2.40), ("2019-12", 1.55), ("2020-06", 0.08), ("2020-12", 0.09),
             ("2021-06", 0.08), ("2021-12", 0.08), ("2022-06", 1.21), ("2022-12", 4.10),
             ("2023-06", 5.08), ("2023-12", 5.33), ("2024-06", 5.33), ("2024-12", 4.58),
-            ("2025-06", 4.33),
+            ("2025-03", 4.33), ("2025-06", 4.33), ("2025-09", 4.33), ("2025-12", 4.33),
+            ("2026-03", 4.33), ("2026-06", 4.33), ("2026-09", 4.33), ("2026-11", 4.33),
         ],
     },
     "BR": {
@@ -64,12 +66,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "fred_id": "IRSTCI01BRM156N",
         "bcb_sgs": 432,
         "moeda": "BRL",
+        "taxa_atual_ref": 13.75,
         "inflacao_atual": 4.56,
         "historico_ref": [
             ("2019-06", 6.50), ("2019-12", 4.50), ("2020-06", 2.25), ("2020-12", 2.00),
             ("2021-06", 4.25), ("2021-12", 9.25), ("2022-06", 13.25), ("2022-12", 13.75),
             ("2023-06", 13.75), ("2023-12", 11.75), ("2024-06", 10.50), ("2024-12", 12.25),
-            ("2025-06", 13.25),
+            ("2025-03", 13.25), ("2025-06", 13.75), ("2025-09", 13.75), ("2025-12", 13.75),
+            ("2026-03", 13.75), ("2026-06", 13.75), ("2026-09", 13.75), ("2026-11", 13.75),
         ],
     },
     "EU": {
@@ -79,12 +83,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "GKLIB3M",
         "fred_id": "ECBDFR",
         "moeda": "EUR",
+        "taxa_atual_ref": 2.90,
         "inflacao_atual": 2.00,
         "historico_ref": [
             ("2019-06", -0.40), ("2019-12", -0.50), ("2020-06", -0.50), ("2020-12", -0.50),
             ("2021-06", -0.50), ("2021-12", -0.50), ("2022-06", -0.50), ("2022-12", 2.00),
             ("2023-06", 3.50), ("2023-12", 4.00), ("2024-06", 3.75), ("2024-12", 3.15),
-            ("2025-06", 2.90),
+            ("2025-03", 2.90), ("2025-06", 2.90), ("2025-09", 2.90), ("2025-12", 2.90),
+            ("2026-03", 2.90), ("2026-06", 2.90), ("2026-09", 2.90), ("2026-11", 2.90),
         ],
     },
     "GB": {
@@ -94,12 +100,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "GBRBOE1M",
         "fred_id": "IRSTCI01GBM156N",
         "moeda": "GBP",
+        "taxa_atual_ref": 4.50,
         "inflacao_atual": 2.30,
         "historico_ref": [
             ("2019-06", 0.75), ("2019-12", 0.75), ("2020-06", 0.10), ("2020-12", 0.10),
             ("2021-06", 0.10), ("2021-12", 0.25), ("2022-06", 1.25), ("2022-12", 3.50),
             ("2023-06", 5.00), ("2023-12", 5.25), ("2024-06", 5.25), ("2024-12", 4.75),
-            ("2025-06", 4.50),
+            ("2025-03", 4.50), ("2025-06", 4.50), ("2025-09", 4.50), ("2025-12", 4.50),
+            ("2026-03", 4.50), ("2026-06", 4.50), ("2026-09", 4.50), ("2026-11", 4.50),
         ],
     },
     "JP": {
@@ -109,12 +117,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "JCC_BOJ",
         "fred_id": "IRSTCI01JPM156N",
         "moeda": "JPY",
+        "taxa_atual_ref": 0.50,
         "inflacao_atual": 2.30,
         "historico_ref": [
             ("2019-06", -0.10), ("2019-12", -0.10), ("2020-06", -0.10), ("2020-12", -0.10),
             ("2021-06", -0.10), ("2021-12", -0.10), ("2022-06", -0.10), ("2022-12", -0.10),
             ("2023-06", -0.10), ("2023-12", -0.10), ("2024-06", 0.10), ("2024-12", 0.25),
-            ("2025-06", 0.50),
+            ("2025-03", 0.50), ("2025-06", 0.50), ("2025-09", 0.50), ("2025-12", 0.50),
+            ("2026-03", 0.50), ("2026-06", 0.50), ("2026-09", 0.50), ("2026-11", 0.50),
         ],
     },
     "CN": {
@@ -124,12 +134,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "PBOC_LPR",
         "fred_id": "IRSTCI01CNM156N",
         "moeda": "CNY",
+        "taxa_atual_ref": 3.00,
         "inflacao_atual": 0.40,
         "historico_ref": [
             ("2019-06", 4.31), ("2019-12", 4.15), ("2020-06", 3.85), ("2020-12", 3.85),
             ("2021-06", 3.85), ("2021-12", 3.80), ("2022-06", 3.70), ("2022-12", 3.65),
             ("2023-06", 3.55), ("2023-12", 3.45), ("2024-06", 3.45), ("2024-12", 3.10),
-            ("2025-06", 3.00),
+            ("2025-03", 3.10), ("2025-06", 3.00), ("2025-09", 3.00), ("2025-12", 3.00),
+            ("2026-03", 3.00), ("2026-06", 3.00), ("2026-09", 3.00), ("2026-11", 3.00),
         ],
     },
     "CH": {
@@ -139,12 +151,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "SNB_RATE",
         "fred_id": "IRSTCI01CHM156N",
         "moeda": "CHF",
+        "taxa_atual_ref": 0.25,
         "inflacao_atual": 0.80,
         "historico_ref": [
             ("2019-06", -0.75), ("2019-12", -0.75), ("2020-06", -0.75), ("2020-12", -0.75),
             ("2021-06", -0.75), ("2021-12", -0.75), ("2022-06", -0.25), ("2022-12", 1.00),
             ("2023-06", 1.75), ("2023-12", 1.75), ("2024-06", 1.25), ("2024-12", 0.50),
-            ("2025-06", 0.25),
+            ("2025-03", 0.25), ("2025-06", 0.25), ("2025-09", 0.25), ("2025-12", 0.25),
+            ("2026-03", 0.25), ("2026-06", 0.25), ("2026-09", 0.25), ("2026-11", 0.25),
         ],
     },
     "CA": {
@@ -154,12 +168,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "BOC_RATE",
         "fred_id": "IRSTCI01CAM156N",
         "moeda": "CAD",
+        "taxa_atual_ref": 3.00,
         "inflacao_atual": 2.00,
         "historico_ref": [
             ("2019-06", 1.75), ("2019-12", 1.75), ("2020-06", 0.25), ("2020-12", 0.25),
             ("2021-06", 0.25), ("2021-12", 0.25), ("2022-06", 1.50), ("2022-12", 4.25),
             ("2023-06", 4.75), ("2023-12", 5.00), ("2024-06", 4.75), ("2024-12", 3.25),
-            ("2025-06", 3.00),
+            ("2025-03", 3.00), ("2025-06", 3.00), ("2025-09", 3.00), ("2025-12", 3.00),
+            ("2026-03", 3.00), ("2026-06", 3.00), ("2026-09", 3.00), ("2026-11", 3.00),
         ],
     },
     "AU": {
@@ -169,12 +185,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "RBA_RATE",
         "fred_id": "IRSTCI01AUM156N",
         "moeda": "AUD",
+        "taxa_atual_ref": 4.10,
         "inflacao_atual": 2.80,
         "historico_ref": [
             ("2019-06", 1.25), ("2019-12", 0.75), ("2020-06", 0.25), ("2020-12", 0.10),
             ("2021-06", 0.10), ("2021-12", 0.10), ("2022-06", 0.85), ("2022-12", 3.10),
             ("2023-06", 4.10), ("2023-12", 4.35), ("2024-06", 4.35), ("2024-12", 4.35),
-            ("2025-06", 4.10),
+            ("2025-03", 4.10), ("2025-06", 4.10), ("2025-09", 4.10), ("2025-12", 4.10),
+            ("2026-03", 4.10), ("2026-06", 4.10), ("2026-09", 4.10), ("2026-11", 4.10),
         ],
     },
     "MX": {
@@ -184,12 +202,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "BANXICO",
         "fred_id": "IRSTCI01MXM156N",
         "moeda": "MXN",
+        "taxa_atual_ref": 9.50,
         "inflacao_atual": 4.70,
         "historico_ref": [
             ("2019-06", 8.25), ("2019-12", 7.25), ("2020-06", 5.00), ("2020-12", 4.25),
             ("2021-06", 4.25), ("2021-12", 5.50), ("2022-06", 7.75), ("2022-12", 10.50),
             ("2023-06", 11.25), ("2023-12", 11.25), ("2024-06", 11.00), ("2024-12", 10.00),
-            ("2025-06", 9.50),
+            ("2025-03", 9.50), ("2025-06", 9.50), ("2025-09", 9.50), ("2025-12", 9.50),
+            ("2026-03", 9.50), ("2026-06", 9.50), ("2026-09", 9.50), ("2026-11", 9.50),
         ],
     },
     "AR": {
@@ -199,12 +219,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "BCRA_TNA",
         "fred_id": "IRSTCI01ARM156N",
         "moeda": "ARS",
+        "taxa_atual_ref": 29.00,
         "inflacao_atual": 115.00,
         "historico_ref": [
             ("2019-06", 62.50), ("2019-12", 55.00), ("2020-06", 38.00), ("2020-12", 38.00),
             ("2021-06", 38.00), ("2021-12", 38.00), ("2022-06", 52.00), ("2022-12", 75.00),
             ("2023-06", 97.00), ("2023-12", 100.00), ("2024-06", 40.00), ("2024-12", 32.00),
-            ("2025-06", 29.00),
+            ("2025-03", 29.00), ("2025-06", 29.00), ("2025-09", 29.00), ("2025-12", 29.00),
+            ("2026-03", 29.00), ("2026-06", 29.00), ("2026-09", 29.00), ("2026-11", 29.00),
         ],
     },
     "IN": {
@@ -214,12 +236,14 @@ CATALOGO_JUROS: dict[str, dict[str, Any]] = {
         "serie_solicitada": "RBI_REPO",
         "fred_id": "IRSTCI01INM156N",
         "moeda": "INR",
+        "taxa_atual_ref": 6.25,
         "inflacao_atual": 5.40,
         "historico_ref": [
             ("2019-06", 5.75), ("2019-12", 5.15), ("2020-06", 4.00), ("2020-12", 4.00),
             ("2021-06", 4.00), ("2021-12", 4.00), ("2022-06", 4.90), ("2022-12", 6.25),
             ("2023-06", 6.50), ("2023-12", 6.50), ("2024-06", 6.50), ("2024-12", 6.50),
-            ("2025-06", 6.25),
+            ("2025-03", 6.25), ("2025-06", 6.25), ("2025-09", 6.25), ("2025-12", 6.25),
+            ("2026-03", 6.25), ("2026-06", 6.25), ("2026-09", 6.25), ("2026-11", 6.25),
         ],
     },
 }
@@ -342,16 +366,74 @@ def consultar_taxas_juros(
     if not codigos:
         codigos = ["US", "BR", "EU", "GB", "JP"]
 
-    cache_key = f"interest_rates_v3_{'_'.join(codigos)}_{start_year}_{end_year}"
+    end_year = max(2020, min(int(end_year), 2026))
+    start_year = max(2000, min(int(start_year), 2025))
+    if end_year - start_year < 3:
+        start_year = max(2019, end_year - 5)
+
+    current_month = datetime.now().strftime("%Y-%m")
+    cache_key = f"interest_rates_v7_{'_'.join(codigos)}_{start_year}_{end_year}_{current_month}"
     offline = is_offline_mode()
     if usar_cache or offline:
-        cached = obter_cache(cache_key, ttl_seconds=3600, permitir_expirado=offline)
-        if cached:
-            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
-            return cached
+        # Monthly update cycle for Central Bank policy rates
+        cached = obter_cache(cache_key, ttl_seconds=2678400, permitir_expirado=True)
+        if cached and cached.get("countries"):
+            same_month = cached.get("cache_month") == current_month
+            lengths = {len(c.get("history", [])) for c in cached["countries"]}
+            if len(lengths) == 1 and next(iter(lengths), 0) >= 12 and (offline or same_month):
+                cached["source_status"] = (
+                    "Offline Mode (Monthly Local DB)"
+                    if offline
+                    else f"Monthly Local DB ({current_month})"
+                )
+                return cached
 
     series_resultado = []
     status_fonte = "FRED / BCB API (Online)"
+
+    def _estender_ate_mes_atual(
+        hist: list[dict[str, Any]],
+        meta: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """
+        Normalizes and forward-fills the interest rate series onto a complete, uniform
+        monthly grid (every YYYY-MM from start_year-01 through current_month) so all
+        countries share the exact same monthly timeline and length on the chart.
+        """
+        taxa_ref = float(meta.get("taxa_atual_ref", hist[-1]["rate"] if hist else 0.0))
+        mapa: dict[str, float] = {}
+        for d_ref, v_ref in meta.get("historico_ref", []):
+            if d_ref <= current_month:
+                mapa[d_ref] = float(v_ref)
+        for h in hist:
+            d_h = str(h.get("date", ""))[:7]
+            if len(d_h) == 7 and d_h <= current_month:
+                mapa[d_h] = float(h["rate"])
+        mapa[current_month] = taxa_ref
+
+        pontos_ordenados = sorted(mapa.items(), key=lambda x: x[0])
+        if not pontos_ordenados:
+            return [{"date": current_month, "rate": round(taxa_ref, 2)}]
+
+        ano_ini = min(start_year, int(pontos_ordenados[0][0][:4]))
+        ano_fim = int(current_month[:4])
+        mes_fim = int(current_month[5:7])
+
+        grade_mensal: list[dict[str, Any]] = []
+        ultimo_valor = float(pontos_ordenados[0][1])
+        idx_p = 0
+        n_p = len(pontos_ordenados)
+
+        for ano in range(ano_ini, ano_fim + 1):
+            m_max = mes_fim if ano == ano_fim else 12
+            for mes in range(1, m_max + 1):
+                ym = f"{ano:04d}-{mes:02d}"
+                while idx_p < n_p and pontos_ordenados[idx_p][0] <= ym:
+                    ultimo_valor = float(pontos_ordenados[idx_p][1])
+                    idx_p += 1
+                grade_mensal.append({"date": ym, "rate": round(ultimo_valor, 2)})
+
+        return grade_mensal
 
     def _fetch_country_rate(cod: str) -> tuple[str, list[dict[str, Any]], bool]:
         meta = CATALOGO_JUROS[cod]
@@ -363,17 +445,37 @@ def consultar_taxas_juros(
                 historico = _buscar_selic_bcb(start_year=start_year)
             if not historico:
                 historico = _buscar_serie_fred(meta["fred_id"], start_year=start_year)
+            if len(historico) >= 2:
+                historico = _estender_ate_mes_atual(historico, meta)
+                salvar_cache(
+                    f"interest_country_real_v7_{cod}",
+                    "interest_permanent",
+                    {"history": historico, "cache_month": current_month},
+                    is_real=True,
+                )
 
-        if historico:
-            historico = [h for h in historico if int(h["date"][:4]) <= end_year]
+        if len(historico) < 2:
+            saved_real = obter_cache(
+                f"interest_country_real_v7_{cod}",
+                ttl_seconds=2678400,
+                permitir_expirado=True,
+                somente_real=True,
+            )
+            if saved_real and isinstance(saved_real.get("history"), list):
+                historico = list(saved_real["history"])
 
-        if not historico:
+        if len(historico) < 2:
             used_fallback = True
-            historico = [
-                {"date": d, "rate": float(v)}
-                for d, v in meta["historico_ref"]
-                if start_year <= int(d[:4]) <= end_year
-            ]
+            historico = [{"date": d, "rate": float(v)} for d, v in meta["historico_ref"]]
+
+        historico = _estender_ate_mes_atual(historico, meta)
+        filtrados = [
+            h
+            for h in historico
+            if start_year <= int(h["date"][:4]) <= max(end_year, int(current_month[:4]))
+        ]
+        if len(filtrados) >= 12:
+            historico = filtrados
         return cod, historico, used_fallback
 
     with ThreadPoolExecutor(max_workers=6) as executor:
@@ -411,6 +513,7 @@ def consultar_taxas_juros(
     resposta = {
         "status": "ok",
         "source_status": status_fonte,
+        "cache_month": current_month,
         "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         "fred_key_configured": bool(
             os.environ.get("FRED_API_KEY", "").strip()

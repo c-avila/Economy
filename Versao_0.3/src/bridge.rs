@@ -1,0 +1,513 @@
+//! Ponte de comunicação assíncrona Rust ↔ Python via `subprocess` e `mpsc::channel`.
+//! Garante que nenhuma requisição de rede ou análise de dados trave a interface gráfica `egui`.
+
+use crate::models::{
+    ChartExportResponse, ForexResponse, InterestResponse, MacroResponse, MarketOverviewResponse,
+    StockDetailResponse,
+};
+use eframe::egui;
+use std::path::Path;
+use std::process::Command;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+/// Mensagens retornadas assincronamente pelas threads de trabalho Python para a GUI Rust.
+#[derive(Debug)]
+pub enum BridgeMessage {
+    OverviewLoaded(MarketOverviewResponse),
+    StockLoaded(StockDetailResponse),
+    ForexLoaded(ForexResponse),
+    InterestLoaded(InterestResponse),
+    MacroLoaded(MacroResponse),
+    ChartExported(ChartExportResponse),
+    CacheCleared(String),
+    Error(String),
+}
+
+/// Manager for asynchronous calls to the Python data engine.
+pub struct PythonBridge {
+    tx: Sender<BridgeMessage>,
+    rx: Receiver<BridgeMessage>,
+    pub active_tasks: usize,
+    pub offline_mode: bool,
+}
+
+impl Default for PythonBridge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PythonBridge {
+    pub fn new() -> Self {
+        let (tx, rx) = channel();
+        Self {
+            tx,
+            rx,
+            active_tasks: 0,
+            offline_mode: false,
+        }
+    }
+
+    /// Coleta todas as mensagens prontas na fila sem bloquear o frame da interface.
+    pub fn poll_messages(&mut self) -> Vec<BridgeMessage> {
+        let mut msgs = Vec::new();
+        while let Ok(msg) = self.rx.try_recv() {
+            if self.active_tasks > 0 {
+                self.active_tasks -= 1;
+            }
+            msgs.push(msg);
+        }
+        msgs
+    }
+
+    /// Resolves the working directory containing `python_engine` and optional writable data dir.
+    /// On macOS `.app` bundles, `python_engine` is located in `Contents/Resources` and writable
+    /// data (`cache.db`, `exports/`) is stored in `~/Library/Application Support/DAX_Economy/data`.
+    fn resolver_diretorios() -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(macos_dir) = exe.parent() {
+                    let exe_str = exe.to_string_lossy();
+                    if exe_str.contains(".app/Contents/MacOS") {
+                        if let Some(contents_dir) = macos_dir.parent() {
+                            let resources_dir = contents_dir.join("Resources");
+                            let data_dir = std::env::var("HOME").ok().map(|h| {
+                                std::path::PathBuf::from(h)
+                                    .join("Library")
+                                    .join("Application Support")
+                                    .join("DAX_Economy")
+                                    .join("data")
+                            });
+                            if resources_dir.join("python_engine").exists() {
+                                return (Some(resources_dir), data_dir);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (None, None)
+    }
+
+    /// Detects the Python executable, prioritizing the isolated `.venv` environment
+    /// on both Windows 11 and macOS/Linux.
+    fn detectar_executavel_python(working_dir: Option<&Path>) -> String {
+        let mut candidatos: Vec<std::path::PathBuf> = Vec::new();
+
+        if let Some(base) = working_dir {
+            candidatos.push(base.join(".venv").join("bin").join("python3"));
+            candidatos.push(base.join(".venv").join("bin").join("python"));
+        }
+
+        #[cfg(target_os = "macos")]
+        if let Ok(home) = std::env::var("HOME") {
+            let app_venv = std::path::PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("DAX_Economy")
+                .join(".venv")
+                .join("bin");
+            candidatos.push(app_venv.join("python3"));
+            candidatos.push(app_venv.join("python"));
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            candidatos.push(std::path::PathBuf::from(r".venv\Scripts\python.exe"));
+            candidatos.push(std::path::PathBuf::from(r"venv\Scripts\python.exe"));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            candidatos.push(std::path::PathBuf::from(".venv/bin/python3"));
+            candidatos.push(std::path::PathBuf::from(".venv/bin/python"));
+            candidatos.push(std::path::PathBuf::from("venv/bin/python3"));
+        }
+
+        for caminho in candidatos {
+            if caminho.exists() {
+                return caminho.to_string_lossy().to_string();
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            "python".to_string()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            for sys_py in [
+                "python3",
+                "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+                "/opt/homebrew/bin/python3",
+                "/usr/local/bin/python3",
+            ] {
+                if sys_py == "python3" || Path::new(sys_py).exists() {
+                    return sys_py.to_string();
+                }
+            }
+            "python3".to_string()
+        }
+    }
+
+    /// Runs `python -m python_engine.cli ...` and returns raw JSON output.
+    fn executar_cli_python(args: &[String], offline_mode: bool) -> Result<String, String> {
+        let (working_dir, data_dir) = Self::resolver_diretorios();
+        let python_bin = Self::detectar_executavel_python(working_dir.as_deref());
+        let mut cmd = Command::new(&python_bin);
+        if let Some(ref wd) = working_dir {
+            cmd.current_dir(wd);
+        }
+        if let Some(ref dd) = data_dir {
+            let _ = std::fs::create_dir_all(dd);
+            cmd.env("DAX_DATA_DIR", dd);
+        }
+        if offline_mode {
+            cmd.env("DAX_OFFLINE_MODE", "1");
+        }
+        cmd.arg("-m").arg("python_engine.cli").args(args);
+        cmd.env("PYTHONIOENCODING", "utf-8");
+
+        // On Windows, avoid opening a black console window when spawning subprocess
+        #[cfg(target_os = "windows")]
+        {
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let output = cmd.output().map_err(|e| {
+            format!(
+                "Could not execute Python engine ('{python_bin}'). Please verify Python and .venv are installed: {e}"
+            )
+        })?;
+
+        let stdout_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stderr_str = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+        if !output.status.success() && stdout_str.is_empty() {
+            return Err(format!(
+                "Python engine returned an error (code {:?}): {}",
+                output.status.code(),
+                if stderr_str.is_empty() {
+                    "No additional details."
+                } else {
+                    &stderr_str
+                }
+            ));
+        }
+
+        if stdout_str.is_empty() {
+            return Err("Python engine returned an empty response.".to_string());
+        }
+
+        // Caso alguma biblioteca imprima avisos antes do JSON, extrai a última linha JSON válida
+        let json_line = stdout_str
+            .lines()
+            .rev()
+            .find(|l| l.trim_start().starts_with('{'))
+            .unwrap_or(&stdout_str)
+            .to_string();
+
+        Ok(json_line)
+    }
+
+    /// Requests the Market Overview & Scanner (Dax1, Dax2, Dax4).
+    pub fn request_overview(&mut self, favoritos: &[String], force_refresh: bool, ctx: egui::Context) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let tickers_arg = favoritos.join(",");
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "overview".to_string(),
+                "--tickers".to_string(),
+                tickers_arg,
+            ];
+            if force_refresh {
+                args.push("--no-cache".to_string());
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<MarketOverviewResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::OverviewLoaded(resp),
+                    Ok(_) => BridgeMessage::Error(format!("Unexpected Overview response: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse Overview JSON: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Requests detailed OHLCV analysis and multiples for a stock (Dax3).
+    #[allow(clippy::too_many_arguments)]
+    pub fn request_stock(
+        &mut self,
+        ticker: &str,
+        period: &str,
+        start_date: &str,
+        end_date: &str,
+        currency: &str,
+        force_refresh: bool,
+        ctx: egui::Context,
+    ) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let ticker_s = ticker.trim().to_uppercase();
+        let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
+        let curr_s = currency.to_string();
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "stock".to_string(),
+                "--ticker".to_string(),
+                ticker_s,
+                "--period".to_string(),
+                period_s,
+                "--currency".to_string(),
+                curr_s,
+            ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
+            if force_refresh {
+                args.push("--no-cache".to_string());
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<StockDetailResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::StockLoaded(resp),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying stock: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse stock data: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Requests FX quotes and US Dollar Index (DXY=).
+    pub fn request_forex(
+        &mut self,
+        pairs: &[String],
+        period: &str,
+        start_date: &str,
+        end_date: &str,
+        force_refresh: bool,
+        ctx: egui::Context,
+    ) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let pairs_arg = pairs.join(",");
+        let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "forex".to_string(),
+                "--pairs".to_string(),
+                pairs_arg,
+                "--period".to_string(),
+                period_s,
+            ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
+            if force_refresh {
+                args.push("--no-cache".to_string());
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<ForexResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::ForexLoaded(resp),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying FX rates: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse FX JSON: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Requests policy interest rates from selected Central Banks.
+    pub fn request_interest(
+        &mut self,
+        countries: &[String],
+        start_year: i32,
+        end_year: i32,
+        force_refresh: bool,
+        ctx: egui::Context,
+    ) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let countries_arg = countries.join(",");
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "interest".to_string(),
+                "--countries".to_string(),
+                countries_arg,
+                "--start-year".to_string(),
+                start_year.to_string(),
+                "--end-year".to_string(),
+                end_year.to_string(),
+            ];
+            if force_refresh {
+                args.push("--no-cache".to_string());
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<InterestResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::InterestLoaded(resp),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying interest rates: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse interest rates JSON: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Requests World Bank socioeconomic indicators.
+    pub fn request_macro(
+        &mut self,
+        countries: &[String],
+        start_year: i32,
+        end_year: i32,
+        force_refresh: bool,
+        ctx: egui::Context,
+    ) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let countries_arg = countries.join(",");
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "macro".to_string(),
+                "--countries".to_string(),
+                countries_arg,
+                "--start-year".to_string(),
+                start_year.to_string(),
+                "--end-year".to_string(),
+                end_year.to_string(),
+            ];
+            if force_refresh {
+                args.push("--no-cache".to_string());
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<MacroResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::MacroLoaded(resp),
+                    Ok(_) => BridgeMessage::Error(format!("Error querying World Bank: {json_str}")),
+                    Err(e) => BridgeMessage::Error(format!("Failed to parse macro JSON: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Requests interactive Plotly (HTML) or Matplotlib (PNG) chart export.
+    #[allow(clippy::too_many_arguments)]
+    pub fn request_export_chart(
+        &mut self,
+        ticker: &str,
+        period: &str,
+        start_date: &str,
+        end_date: &str,
+        currency: &str,
+        format: &str,
+        ctx: egui::Context,
+    ) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        let ticker_s = ticker.to_string();
+        let period_s = period.to_string();
+        let start_s = start_date.trim().to_string();
+        let end_s = end_date.trim().to_string();
+        let curr_s = currency.to_string();
+        let fmt_s = format.to_string();
+        let offline = self.offline_mode;
+
+        thread::spawn(move || {
+            let mut args = vec![
+                "export_chart".to_string(),
+                "--ticker".to_string(),
+                ticker_s,
+                "--period".to_string(),
+                period_s,
+                "--currency".to_string(),
+                curr_s,
+                "--format".to_string(),
+                fmt_s,
+            ];
+            if !start_s.is_empty() && !end_s.is_empty() {
+                args.push("--start-date".to_string());
+                args.push(start_s);
+                args.push("--end-date".to_string());
+                args.push(end_s);
+            }
+
+            let msg = match Self::executar_cli_python(&args, offline) {
+                Ok(json_str) => match serde_json::from_str::<ChartExportResponse>(&json_str) {
+                    Ok(resp) if resp.status == "ok" => BridgeMessage::ChartExported(resp),
+                    Ok(resp) => BridgeMessage::Error(resp.message),
+                    Err(e) => BridgeMessage::Error(format!("Failed to export chart: {e}")),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Clears the local SQLite cache.
+    pub fn request_clear_cache(&mut self, ctx: egui::Context) {
+        self.active_tasks += 1;
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            let args = vec!["clear_cache".to_string()];
+            let msg = match Self::executar_cli_python(&args, false) {
+                Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                    Ok(v) => {
+                        let m = v
+                            .get("message")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("Local cache cleared.")
+                            .to_string();
+                        BridgeMessage::CacheCleared(m)
+                    }
+                    Err(_) => BridgeMessage::CacheCleared("Local cache cleared.".to_string()),
+                },
+                Err(err) => BridgeMessage::Error(err),
+            };
+            let _ = tx.send(msg);
+            ctx.request_repaint();
+        });
+    }
+}
+

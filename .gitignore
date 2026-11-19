@@ -15,6 +15,9 @@ __pycache__/
 # Cache temporario e banco SQLite de execucao local
 /data/cache.db
 /data/cache.db-journal
+/data/cache.db-wal
+/data/cache.db-shm
+/data/macro_permanent.json
 /data/mpl_cache/
 /data/exports/
 

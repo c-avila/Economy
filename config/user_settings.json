@@ -11,15 +11,17 @@
     "BVSP"
   ],
   "selected_ticker": "PETR4",
-  "selected_period": "1y",
+  "selected_period": "1mo",
+  "analysis_start_date": "2026-10-20",
+  "analysis_end_date": "2026-11-20",
   "display_currency": "ORIGINAL",
   "selected_forex_pairs": [
     "USDBRL=X",
     "EURUSD=X",
     "GBPUSD=X",
     "USDJPY=X",
-    "USDCNY=X",
-    "DX-Y.NYB"
+    "DX-Y.NYB",
+    "USDARS=X"
   ],
   "forex_spotlight_three": [
     "USDBRL=X",
@@ -33,7 +35,7 @@
     "EU",
     "GB",
     "JP",
-    "CN"
+    "AR"
   ],
   "selected_macro_countries": [
     "USA",
@@ -41,9 +43,12 @@
     "DEU",
     "GBR",
     "JPN",
-    "CHN"
+    "CHN",
+    "ARG"
   ],
-  "macro_start_year": 2015,
+  "macro_start_year": 2019,
   "macro_end_year": 2025,
-  "use_cache": true
+  "use_cache": true,
+  "dark_mode": true,
+  "offline_mode": false
 }

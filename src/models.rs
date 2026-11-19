@@ -14,6 +14,7 @@ pub struct TopBarTicker {
     pub subtitle: String,
     pub value: String,
     pub change_pct: f64,
+    pub last_date: String,
     pub sparkline: Vec<f64>,
 }
 
@@ -23,6 +24,7 @@ pub struct MoverItem {
     pub code: String,
     pub change_pct: f64,
     pub price: f64,
+    pub last_date: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -44,6 +46,7 @@ pub struct AssetCardData {
     pub dy: f64,
     pub roe: f64,
     pub eps: f64,
+    pub last_date: String,
     pub sparkline: Vec<f64>,
 }
 
@@ -191,6 +194,7 @@ pub struct CountryInterestData {
 pub struct InterestResponse {
     pub status: String,
     pub source_status: String,
+    pub cache_month: String,
     pub updated_at: String,
     pub fred_key_configured: bool,
     pub countries: Vec<CountryInterestData>,
@@ -207,6 +211,12 @@ pub struct IndicatorMeta {
     pub wb_code: String,
     pub name: String,
     pub unit: String,
+    pub category: String,
+    pub update_frequency: String,
+    pub description: String,
+    pub market_impact: String,
+    pub source_name: String,
+    pub reference_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -230,6 +240,7 @@ pub struct CountryMacroProfile {
 pub struct MacroResponse {
     pub status: String,
     pub source_status: String,
+    pub cache_month: String,
     pub start_year: i32,
     pub end_year: i32,
     pub updated_at: String,

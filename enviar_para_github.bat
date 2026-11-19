@@ -25,22 +25,24 @@ git remote add origin "%REPO_URL%"
 
 :FAZER_COMMIT_E_PUSH
 echo.
-echo [1/4] Garantindo a tag da Versao 0.1 (v0.1) no commit inicial...
+echo [1/4] Garantindo as tags das versoes anteriores (v0.1 e v0.2)...
 git rev-parse v0.1 >nul 2>nul
-if errorlevel 1 git tag -a v0.1 -m "Versao 0.1 - Release Inicial Congelada" HEAD >nul 2>nul
+if errorlevel 1 git tag -a v0.1 -m "Versao 0.1 - Release Inicial Congelada" 6353472 >nul 2>nul
+git rev-parse v0.2 >nul 2>nul
+if errorlevel 1 git tag -a v0.2 -m "Versao 0.2 - Release Congelada" 85598ba >nul 2>nul
 
-echo [2/4] Adicionando alteracoes da Versao 0.2 ao controle de versao Git...
+echo [2/4] Adicionando alteracoes da Versao 0.3 ao controle de versao Git...
 git add .
 
-echo [3/4] Gravando commit e tag da Versao 0.2 (v0.2)...
-git commit -m "Release v0.2: melhorias abas (b)/(c)/(d), sincronizacao de paises, legendas abaixo dos graficos e layout corrigido" >nul 2>nul
-git tag -f -a v0.2 -m "Versao 0.2 - Melhorias Macro, Moedas, Juros, Legendas e Layout"
+echo [3/4] Gravando commit e tag da Versao 0.3 (v0.3)...
+git commit -m "Release v0.3: 14 indicadores macroeconomicos, fontes oficiais, ciclo mensal, armazenamento permanente SQLite WAL, datas e tooltips nos graficos" >nul 2>nul
+git tag -f -a v0.3 -m "Versao 0.3 - Macro 14 Series, Ciclo Mensal, SQLite Permanente, Datas e Tooltips"
 
-echo [4/4] Enviando codigo e tags (v0.1 e v0.2) para o GitHub [branch main]...
+echo [4/4] Enviando codigo e tags (v0.1, v0.2 e v0.3) para o GitHub [branch main]...
 git branch -M main
 git push -u origin main --tags
 echo.
-echo Concluido! A Versao 0.1 (tag v0.1) e a Versao 0.2 (tag v0.2) foram enviadas ao GitHub.
+echo Concluido! A Versao 0.3 (tag v0.3) foi enviada ao GitHub com sucesso.
 pause
 exit /b 0
 

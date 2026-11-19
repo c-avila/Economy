@@ -18,7 +18,7 @@ try:
 except ImportError:
     yf = None
 
-from .cache_manager import is_offline_mode, obter_cache, salvar_cache
+from .cache_manager import end_date_inclusivo, is_offline_mode, obter_cache, salvar_cache
 from .forex_service import converter_moeda, obter_taxas_cambio_usd
 
 # Catálogo de empresas de referência (B3 e Globais) para enriquecer o Scanner (Dax4) e Cards (Dax2)
@@ -345,9 +345,9 @@ def consultar_acao_detalhada(
     offline = is_offline_mode()
 
     if usar_cache or offline:
-        cached = obter_cache(cache_key, ttl_seconds=1800, permitir_expirado=offline)
+        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
         if cached:
-            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache"
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache (10 min)"
             return cached
 
     meta = CATALOGO_ACOES.get(yf_ticker, {})
@@ -359,12 +359,17 @@ def consultar_acao_detalhada(
     df_hist = pd.DataFrame()
     info_yf: dict[str, Any] = {}
     status_fonte = "Yahoo Finance API (Online)"
+    used_fallback = False
 
     if yf is not None and not offline:
         try:
             tk = yf.Ticker(yf_ticker)
             if has_custom_dates:
-                df_full = tk.history(start=start_date.strip(), end=end_date.strip(), auto_adjust=False)
+                df_full = tk.history(
+                    start=start_date.strip(),
+                    end=end_date_inclusivo(end_date.strip()),
+                    auto_adjust=False,
+                )
             else:
                 periodo_download = "1y" if period in ("5d", "1mo", "6mo") else period
                 df_full = tk.history(period=periodo_download, auto_adjust=False)
@@ -378,7 +383,17 @@ def consultar_acao_detalhada(
             df_hist = pd.DataFrame()
 
     if df_hist is None or df_hist.empty or "Close" not in df_hist:
-        df_hist = _gerar_ohlcv_contingencia(yf_ticker, period="5y" if has_custom_dates else ("1y" if period in ("5d", "1mo", "6mo") else period))
+        # Before generating synthetic fallback, try to recover the last REAL saved data from SQLite
+        last_real = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=True, somente_real=True)
+        if last_real:
+            last_real["source_status"] = "Last Verified Real Data (Local DB)"
+            return last_real
+
+        used_fallback = True
+        df_hist = _gerar_ohlcv_contingencia(
+            yf_ticker,
+            period="5y" if has_custom_dates else ("1y" if period in ("5d", "1mo", "6mo") else period),
+        )
         if has_custom_dates and not df_hist.empty:
             idx_dates = df_hist.index.strftime("%Y-%m-%d")
             mask = (idx_dates >= start_date.strip()) & (idx_dates <= end_date.strip())
@@ -494,7 +509,7 @@ def consultar_acao_detalhada(
         "candles": candles,
     }
 
-    salvar_cache(cache_key, "stock_detail", resposta)
+    salvar_cache(cache_key, "stock_detail", resposta, is_real=not used_fallback)
     return resposta
 
 
@@ -599,16 +614,18 @@ def _formatar_pontos_indice(pts: float) -> str:
     return f"{pts:,.2f} pts".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _coletar_indices_mundiais_topo() -> list[dict[str, Any]]:
+def _coletar_indices_mundiais_topo() -> tuple[list[dict[str, Any]], bool]:
     """
-    Busca em lote via `yfinance` os 11 índices das principais bolsas mundiais
-    (Brasil, Wall Street Dow/S&P500, Nasdaq, Japão, China, Alemanha, Inglaterra,
-    França, Espanha e Argentina) com sparkline dos últimos pregões.
+    Fetches in batch via `yfinance` the 11 major global stock market indices
+    with sparkline of recent sessions, persisting real quotes in SQLite so
+    temporary network drops still display the last verified real index levels.
     """
     tickers_yf = [item["yf_ticker"] for item in CATALOGO_INDICES_MUNDIAIS]
     dados_close = None
+    offline = is_offline_mode()
+    cache_key_top = "top_bar_world_indices_real_v3"
 
-    if yf is not None:
+    if yf is not None and not offline:
         try:
             df_download = yf.download(tickers_yf, period="1mo", progress=False, auto_adjust=True)
             if df_download is not None and not df_download.empty and "Close" in df_download:
@@ -616,12 +633,23 @@ def _coletar_indices_mundiais_topo() -> list[dict[str, Any]]:
         except Exception:
             dados_close = None
 
+    last_real_top = obter_cache(cache_key_top, ttl_seconds=86400, permitir_expirado=True, somente_real=True)
+    mapa_real_ant: dict[str, dict[str, Any]] = {}
+    if last_real_top and isinstance(last_real_top.get("items"), list):
+        for it in last_real_top["items"]:
+            if isinstance(it, dict) and "code" in it:
+                mapa_real_ant[it["code"]] = it
+
+    hoje_str = datetime.now().strftime("%Y-%m-%d")
     resultado_topo: list[dict[str, Any]] = []
+    obteve_algum_real = False
     for meta in CATALOGO_INDICES_MUNDIAIS:
         yf_tk = meta["yf_ticker"]
         pts_atual = float(meta["ref_pts"])
         var_dia = float(meta["ref_var"])
         spark = list(meta["ref_spark"])
+        data_ref = hoje_str
+        item_real = False
 
         if dados_close is not None and yf_tk in dados_close:
             serie = dados_close[yf_tk].dropna()
@@ -631,6 +659,17 @@ def _coletar_indices_mundiais_topo() -> list[dict[str, Any]]:
                 if pts_ant > 0:
                     var_dia = round(((pts_atual - pts_ant) / pts_ant) * 100.0, 2)
                 spark = [_limpar_float(v, pts_atual) for v in serie.tail(12).tolist()]
+                ult_idx = serie.index[-1]
+                data_ref = ult_idx.strftime("%Y-%m-%d") if hasattr(ult_idx, "strftime") else str(ult_idx)[:10]
+                item_real = True
+                obteve_algum_real = True
+
+        if not item_real and meta["code"] in mapa_real_ant:
+            ant = dict(mapa_real_ant[meta["code"]])
+            if not ant.get("last_date"):
+                ant["last_date"] = hoje_str
+            resultado_topo.append(ant)
+            continue
 
         resultado_topo.append(
             {
@@ -638,11 +677,15 @@ def _coletar_indices_mundiais_topo() -> list[dict[str, Any]]:
                 "subtitle": meta["subtitle"],
                 "value": _formatar_pontos_indice(pts_atual),
                 "change_pct": var_dia,
+                "last_date": data_ref,
                 "sparkline": spark,
             }
         )
 
-    return resultado_topo
+    if obteve_algum_real:
+        salvar_cache(cache_key_top, "world_indices", {"items": resultado_topo}, is_real=True)
+
+    return resultado_topo, obteve_algum_real
 
 
 def consultar_visao_geral_mercado(
@@ -656,14 +699,6 @@ def consultar_visao_geral_mercado(
     3. Cards de ativos com sparklines e métricas rápidas (Dax2).
     4. Tabela completa do Scanner de Ações com múltiplos fundamentalistas (Dax4).
     """
-    cache_key = "market_overview_dax_global_v2"
-    offline = is_offline_mode()
-    if usar_cache or offline:
-        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
-        if cached:
-            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache (10 min)"
-            return cached
-
     todos_tickers = list(CATALOGO_ACOES.keys())
     if favoritos:
         for fav in favoritos:
@@ -671,8 +706,18 @@ def consultar_visao_geral_mercado(
             if tn not in todos_tickers:
                 todos_tickers.append(tn)
 
+    cache_key = f"market_overview_dax_global_v4_{'_'.join(sorted(todos_tickers))}"
+    offline = is_offline_mode()
+    if usar_cache or offline:
+        cached = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=offline)
+        if cached:
+            cached["source_status"] = "Offline Mode (Local Cache)" if offline else "Local SQLite Cache (10 min)"
+            return cached
+
     cards_ativos: list[dict[str, Any]] = []
     status_fonte = "Yahoo Finance API (Online)"
+    algum_real = False
+    hoje_str = datetime.now().strftime("%Y-%m-%d")
 
     def _fetch_one(yf_tk: str) -> dict[str, Any]:
         return consultar_acao_detalhada(yf_tk, period="1mo", moeda_exibicao="ORIGINAL", usar_cache=usar_cache)
@@ -681,11 +726,16 @@ def consultar_visao_geral_mercado(
         detalhes = list(executor.map(_fetch_one, todos_tickers))
 
     for yf_ticker, detalhe in zip(todos_tickers, detalhes):
-        if detalhe.get("source_status", "").startswith(("Resilient", "Offline")):
-            status_fonte = detalhe["source_status"]
+        src_st = detalhe.get("source_status", "")
+        if "Online" in src_st or "Real" in src_st:
+            algum_real = True
+        elif src_st.startswith(("Resilient", "Offline")) and not algum_real:
+            status_fonte = src_st
 
         m = detalhe["metrics"]
-        sparkline = [c["close"] for c in detalhe["candles"][-22:]]
+        candles_det = detalhe.get("candles", [])
+        sparkline = [c["close"] for c in candles_det[-22:]]
+        last_date = candles_det[-1]["date"] if candles_det else hoje_str
         cards_ativos.append(
             {
                 "ticker": yf_ticker,
@@ -704,6 +754,7 @@ def consultar_visao_geral_mercado(
                 "dy": m["dividend_yield_pct"],
                 "roe": m["roe_pct"],
                 "eps": m["eps"],
+                "last_date": last_date,
                 "sparkline": sparkline,
             }
         )
@@ -711,24 +762,31 @@ def consultar_visao_geral_mercado(
     # Ordena para separar Altas e Baixas (Dax1)
     ordenados = sorted(cards_ativos, key=lambda x: x["change_day_pct"], reverse=True)
     altas = [
-        {"code": item["short_code"], "change_pct": item["change_day_pct"], "price": item["price"]}
+        {"code": item["short_code"], "change_pct": item["change_day_pct"], "price": item["price"], "last_date": item["last_date"]}
         for item in ordenados
         if item["change_day_pct"] >= 0
     ][:7]
     baixas = [
-        {"code": item["short_code"], "change_pct": item["change_day_pct"], "price": item["price"]}
+        {"code": item["short_code"], "change_pct": item["change_day_pct"], "price": item["price"], "last_date": item["last_date"]}
         for item in reversed(ordenados)
         if item["change_day_pct"] < 0
     ][:7]
 
     # Garante preenchimento visual estilo Dax1 mesmo se todos subirem ou caírem no dia
     if not altas:
-        altas = [{"code": item["short_code"], "change_pct": abs(item["change_day_pct"]) + 0.45, "price": item["price"]} for item in ordenados[:5]]
+        altas = [{"code": item["short_code"], "change_pct": abs(item["change_day_pct"]) + 0.45, "price": item["price"], "last_date": item["last_date"]} for item in ordenados[:5]]
     if not baixas:
-        baixas = [{"code": item["short_code"], "change_pct": -abs(item["change_day_pct"]) - 0.35, "price": item["price"]} for item in reversed(ordenados[-5:])]
+        baixas = [{"code": item["short_code"], "change_pct": -abs(item["change_day_pct"]) - 0.35, "price": item["price"], "last_date": item["last_date"]} for item in reversed(ordenados[-5:])]
 
     # Mini-cards superiores das Principais Bolsas Mundiais
-    top_tickers = _coletar_indices_mundiais_topo()
+    top_tickers, top_real = _coletar_indices_mundiais_topo()
+    is_real_overview = bool(algum_real or top_real)
+
+    if not is_real_overview:
+        last_real_ov = obter_cache(cache_key, ttl_seconds=600, permitir_expirado=True, somente_real=True)
+        if last_real_ov:
+            last_real_ov["source_status"] = "Last Verified Real Data (Local DB)"
+            return last_real_ov
 
     resposta = {
         "status": "ok",
@@ -739,6 +797,6 @@ def consultar_visao_geral_mercado(
         "losers": baixas,
         "assets": cards_ativos,
     }
-    salvar_cache(cache_key, "market_overview", resposta)
+    salvar_cache(cache_key, "market_overview", resposta, is_real=is_real_overview)
     return resposta
 

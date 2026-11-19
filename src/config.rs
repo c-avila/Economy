@@ -20,6 +20,23 @@ pub const CATALOGO_MOEDAS_PAISES: &[(&str, &str, &str, &str)] = &[
     ("USDINR=X", "INR — Indian Rupee (India)", "IN", "IND"),
 ];
 
+/// Catalog of supported countries for Tab (d) Macroeconomics (World Bank + FRED + OECD + PMI).
+pub const CATALOGO_PAISES_MACRO: &[(&str, &str)] = &[
+    ("USA", "USA — United States"),
+    ("BRA", "BRA — Brazil"),
+    ("DEU", "DEU — Eurozone / Germany"),
+    ("GBR", "GBR — United Kingdom"),
+    ("JPN", "JPN — Japan"),
+    ("CHN", "CHN — China"),
+    ("FRA", "FRA — France"),
+    ("CHE", "CHE — Switzerland"),
+    ("CAN", "CAN — Canada"),
+    ("AUS", "AUS — Australia"),
+    ("MEX", "MEX — Mexico"),
+    ("ARG", "ARG — Argentina"),
+    ("IND", "IND — India"),
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UserSettings {
@@ -132,8 +149,29 @@ impl UserSettings {
         PathBuf::from("data").join("exports")
     }
 
-    /// Sincroniza automaticamente os países das Abas (c) Taxas de Juros e (d) Socioeconomia (WB)
-    /// para refletirem exatamente os países das moedas selecionadas na Aba (b) Moedas & Dólar (DXY).
+    /// Returns the path to the permanent local macroeconomic snapshot JSON.
+    pub fn macro_permanent_path() -> PathBuf {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(exe) = std::env::current_exe() {
+                let exe_str = exe.to_string_lossy();
+                if exe_str.contains(".app/Contents/MacOS") {
+                    if let Ok(home) = std::env::var("HOME") {
+                        return PathBuf::from(home)
+                            .join("Library")
+                            .join("Application Support")
+                            .join("DAX_Economy")
+                            .join("data")
+                            .join("macro_permanent.json");
+                    }
+                }
+            }
+        }
+        PathBuf::from("data").join("macro_permanent.json")
+    }
+
+    /// Synchronizes Tab (c) Interest Rates countries with Tab (b) Currencies & DXY.
+    /// Initializes Tab (d) Macroeconomic countries only if empty, preserving user's independent selection.
     pub fn sincronizar_paises_com_moedas(&mut self) {
         let mut juros_paises = vec!["US".to_string()];
         let mut macro_paises = vec!["USA".to_string()];
@@ -152,7 +190,9 @@ impl UserSettings {
         }
 
         self.selected_interest_countries = juros_paises;
-        self.selected_macro_countries = macro_paises;
+        if self.selected_macro_countries.is_empty() {
+            self.selected_macro_countries = macro_paises;
+        }
 
         // Garante que as 3 moedas em destaque pertençam às moedas selecionadas (ou "" para Nenhum)
         let disponiveis: Vec<String> = self
@@ -170,6 +210,21 @@ impl UserSettings {
         }
     }
 
+    /// Explicitly copies the countries from Tab (b) Currencies & DXY into Tab (d) Macroeconomics.
+    pub fn sincronizar_macro_com_moedas(&mut self) {
+        let mut macro_paises = vec!["USA".to_string()];
+        for par in &self.selected_forex_pairs {
+            for &(ticker_cat, _nome, _cod_juros, cod_wb) in CATALOGO_MOEDAS_PAISES {
+                if par.eq_ignore_ascii_case(ticker_cat)
+                    && !macro_paises.iter().any(|c| c == cod_wb)
+                {
+                    macro_paises.push(cod_wb.to_string());
+                }
+            }
+        }
+        self.selected_macro_countries = macro_paises;
+    }
+
     /// Conta quantas moedas (excluindo o índice DXY) estão cadastradas na carteira cambial (limite: 10).
     pub fn total_moedas_sem_dxy(&self) -> usize {
         self.selected_forex_pairs
@@ -181,6 +236,8 @@ impl UserSettings {
     /// Carrega as configurações do disco ou retorna o padrão caso o arquivo não exista.
     pub fn carregar() -> Self {
         let path = Self::caminho_arquivo();
+        let today = chrono::Local::now().date_naive();
+        let today_str = today.format("%Y-%m-%d").to_string();
         if let Ok(conteudo) = fs::read_to_string(&path) {
             if let Ok(mut cfg) = serde_json::from_str::<UserSettings>(&conteudo) {
                 if !cfg
@@ -190,7 +247,19 @@ impl UserSettings {
                 {
                     cfg.selected_forex_pairs.insert(0, "DX-Y.NYB".to_string());
                 }
+                // Automatically roll analysis_end_date forward to today when tracking current market sessions
+                if cfg.analysis_end_date.trim().is_empty() {
+                    cfg.analysis_end_date = today_str;
+                } else if let Ok(saved_end) =
+                    chrono::NaiveDate::parse_from_str(cfg.analysis_end_date.trim(), "%Y-%m-%d")
+                {
+                    let diff_days = (today - saved_end).num_days();
+                    if (1..=30).contains(&diff_days) {
+                        cfg.analysis_end_date = today_str;
+                    }
+                }
                 cfg.sincronizar_paises_com_moedas();
+                let _ = cfg.salvar();
                 return cfg;
             }
         }

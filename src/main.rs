@@ -13,7 +13,7 @@ use eframe::egui;
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("DAX - Data Analysis Exchange (v0.2) — Equities, FX (DXY), Global Rates & Macroeconomics")
+            .with_title("DAX - Data Analysis Exchange (v0.3) — Equities, FX (DXY), Global Rates & Macroeconomics")
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([1024.0, 640.0]),
         ..Default::default()
